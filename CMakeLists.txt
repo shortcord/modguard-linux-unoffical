@@ -1,0 +1,50 @@
+cmake_minimum_required(VERSION 3.16)
+project(modguard_linux VERSION 0.2.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_library(exhaust_model STATIC src/exhaust_model.cpp src/config.cpp)
+set_target_properties(exhaust_model PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden)
+target_include_directories(exhaust_model PUBLIC src)
+target_compile_options(exhaust_model PRIVATE -Wall -Wextra -Wpedantic)
+
+add_library(particle_hook STATIC src/particle_hook.cpp src/particle_signature.cpp)
+set_target_properties(particle_hook PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden)
+target_include_directories(particle_hook PUBLIC src)
+target_compile_options(particle_hook PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(particle_hook PRIVATE dl)
+
+add_library(modguard_linux SHARED src/plugin.cpp)
+set_target_properties(modguard_linux PROPERTIES PREFIX "" OUTPUT_NAME "modguard_linux")
+set_target_properties(modguard_linux PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+target_include_directories(modguard_linux PRIVATE include src)
+target_link_libraries(modguard_linux PRIVATE exhaust_model particle_hook)
+target_compile_options(modguard_linux PRIVATE -Wall -Wextra -Wpedantic)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(exhaust_model_test tests/exhaust_model_test.cpp)
+    target_link_libraries(exhaust_model_test PRIVATE exhaust_model)
+    target_compile_options(exhaust_model_test PRIVATE -Wall -Wextra -Wpedantic -UNDEBUG)
+    add_test(NAME exhaust_model_test COMMAND exhaust_model_test)
+
+    add_executable(config_test tests/config_test.cpp)
+    target_link_libraries(config_test PRIVATE exhaust_model)
+    target_compile_options(config_test PRIVATE -Wall -Wextra -Wpedantic -UNDEBUG)
+    add_test(NAME config_test COMMAND config_test)
+
+    add_executable(particle_signature_test tests/particle_signature_test.cpp)
+    target_link_libraries(particle_signature_test PRIVATE particle_hook)
+    target_compile_options(particle_signature_test PRIVATE -Wall -Wextra -Wpedantic -UNDEBUG)
+    add_test(NAME particle_signature_test COMMAND particle_signature_test)
+
+    add_executable(plugin_test tests/plugin_test.cpp src/plugin.cpp)
+    target_include_directories(plugin_test PRIVATE include src)
+    target_link_libraries(plugin_test PRIVATE exhaust_model particle_hook)
+    target_compile_options(plugin_test PRIVATE -Wall -Wextra -Wpedantic -UNDEBUG)
+    add_test(NAME plugin_test COMMAND plugin_test)
+endif()
+
+install(TARGETS modguard_linux LIBRARY DESTINATION plugins)
