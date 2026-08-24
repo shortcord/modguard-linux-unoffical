@@ -29,6 +29,14 @@ void set_ats_layer(std::vector<std::uint8_t> &generator, std::int32_t count, flo
     write(generator, 0x7c, lifetime);
 }
 
+void set_ats160_layer(std::vector<std::uint8_t> &generator, std::int32_t count, float size, float lifetime)
+{
+    write(generator, 0x630, count);
+    write(generator, 0x58, size);
+    write(generator, 0x5c, size);
+    write(generator, 0x62c, lifetime);
+}
+
 } // namespace
 
 int main()
@@ -73,5 +81,20 @@ int main()
     write(ats_generator, 0, base + 0x2d15040);
     write(ats_generator, 0x640, base + 1);
     assert(!modguard::is_ats_155_smoke_container(ats_container, base));
+
+    std::vector<std::uint8_t> ats160_generator(0x700);
+    write(ats160_generator, 0, base + 0x2d15040);
+    set_ats160_layer(ats160_generator, 40, 0.090F, 3.0F);
+    assert(modguard::is_ats_160_smoke_generator(ats160_generator.data(), base));
+    set_ats160_layer(ats160_generator, 20, 0.040F, 0.7F);
+    assert(modguard::is_ats_160_smoke_generator(ats160_generator.data(), base));
+    set_ats160_layer(ats160_generator, 4, 0.020F, 0.2F);
+    assert(modguard::is_ats_160_smoke_generator(ats160_generator.data(), base));
+    set_ats160_layer(ats160_generator, 60, 0.040F, 2.0F);
+    assert(!modguard::is_ats_160_smoke_generator(ats160_generator.data(), base));
+    write(ats160_generator, 0, base + 1);
+    set_ats160_layer(ats160_generator, 40, 0.090F, 3.0F);
+    assert(!modguard::is_ats_160_smoke_generator(ats160_generator.data(), base));
+
     return 0;
 }
