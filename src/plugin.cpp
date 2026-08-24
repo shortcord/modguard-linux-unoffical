@@ -153,6 +153,7 @@ void on_frame_start(scs_event_t, const void *event_info, scs_context_t)
         delta_seconds = static_cast<float>(current_time - previous_time) / 1000000.0F;
     }
     previous_time = current_time;
+    modguard::particle_hook_frame_start();
 }
 
 void on_frame_end(scs_event_t, const void *, scs_context_t)

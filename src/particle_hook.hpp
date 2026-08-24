@@ -24,6 +24,7 @@ struct ParticleHookDiagnostics {
 bool install_particle_hook(const char *game_id, std::uint32_t game_version);
 void remove_particle_hook();
 void set_particle_demand(float demand, bool eligible);
+void particle_hook_frame_start();
 bool particle_hook_active();
 
 } // namespace modguard

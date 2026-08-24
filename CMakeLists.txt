@@ -10,7 +10,7 @@ set_target_properties(exhaust_model PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_
 target_include_directories(exhaust_model PUBLIC src)
 target_compile_options(exhaust_model PRIVATE -Wall -Wextra -Wpedantic)
 
-add_library(particle_hook STATIC src/particle_hook.cpp src/particle_signature.cpp)
+add_library(particle_hook STATIC src/particle_hook.cpp src/particle_signature.cpp src/particle_admission.cpp)
 set_target_properties(particle_hook PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden)
 target_include_directories(particle_hook PUBLIC src)
 target_compile_options(particle_hook PRIVATE -Wall -Wextra -Wpedantic)
@@ -39,6 +39,11 @@ if(BUILD_TESTING)
     target_link_libraries(particle_signature_test PRIVATE particle_hook)
     target_compile_options(particle_signature_test PRIVATE -Wall -Wextra -Wpedantic -UNDEBUG)
     add_test(NAME particle_signature_test COMMAND particle_signature_test)
+
+    add_executable(particle_admission_test tests/particle_admission_test.cpp)
+    target_link_libraries(particle_admission_test PRIVATE particle_hook)
+    target_compile_options(particle_admission_test PRIVATE -Wall -Wextra -Wpedantic -UNDEBUG)
+    add_test(NAME particle_admission_test COMMAND particle_admission_test)
 
     add_executable(plugin_test tests/plugin_test.cpp src/plugin.cpp)
     target_include_directories(plugin_test PRIVATE include src)

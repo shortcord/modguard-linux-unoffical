@@ -1,5 +1,6 @@
 #include "particle_hook.hpp"
 
+#include "particle_admission.hpp"
 #include "particle_signature.hpp"
 
 #include <algorithm>
@@ -69,7 +70,7 @@ struct HookProfile {
     std::size_t spawn_patch_size;
     const std::uint8_t *expected_constructor;
     std::size_t constructor_patch_size;
-    bool (*is_smoke)(const void *, std::uintptr_t);
+    int (*classify_smoke)(const void *, std::uintptr_t);
 };
 
 const HookProfile profiles[] = {
@@ -77,24 +78,24 @@ const HookProfile profiles[] = {
      0x1fadac0, 0x1bd32b0, 0x1fb23c0, 0x640, 0x60,
      ats_160_expected_spawn.data(), spawn_patch_size_160,
      ats_expected_constructor.data(), ats_expected_constructor.size(),
-     is_ats_160_smoke_generator},
+     classify_ats_160_smoke_generator},
     {"ats", 0x00010005, 0x00010005, HookModel::allocator_trampoline,
      0x1fb2e20, 0x1bd32b0, 0x1fb23c0, 0x640, 0x60,
      ats_expected_allocator.data(), allocator_patch_size,
      ats_expected_constructor.data(), ats_expected_constructor.size(),
-     is_ats_155_smoke_container},
+     classify_ats_155_smoke_container},
     {"eut2", 0x00010005, 0x00010005, HookModel::allocator_trampoline,
      0x1f47fb0, 0x1b713f0, 0x1f47640, 0x548, 0x58,
      ets2_expected_allocator.data(), allocator_patch_size,
      ets2_expected_constructor.data(), ets2_expected_constructor.size(),
-     is_ets2_155_smoke_container},
+     classify_ets2_155_smoke_container},
 };
 
 std::atomic<float> demand{0.0F};
 std::atomic<bool> eligible{false};
 std::atomic<bool> active{false};
 std::atomic<std::uint64_t> active_calls{0};
-std::atomic<std::uint64_t> sequence{0};
+LayerSampler sampler;
 std::array<std::atomic<void *>, generator_capacity> generators{};
 std::uintptr_t image_base = 0;
 std::uintptr_t executable_begin = 0;
@@ -213,11 +214,9 @@ bool is_registered_generator(void *generator)
     return false;
 }
 
-std::uint64_t mix(std::uint64_t value)
+void advance_frame()
 {
-    value = (value ^ (value >> 30U)) * 0xbf58476d1ce4e5b9ULL;
-    value = (value ^ (value >> 27U)) * 0x94d049bb133111ebULL;
-    return value ^ (value >> 31U);
+    sampler.frame_start();
 }
 
 void *allocate_original(void *container)
@@ -228,8 +227,10 @@ void *allocate_original(void *container)
 extern "C" void *particle_allocator_hook(void *container)
 {
     CallGuard guard;
-    if (!is_registered_container(container) ||
-        !profile->is_smoke(container, image_base)) {
+    const int layer = is_registered_container(container)
+                          ? profile->classify_smoke(container, image_base)
+                          : -1;
+    if (layer < 0) {
         return allocate_original(container);
     }
     if (!eligible.load(std::memory_order_acquire)) {
@@ -238,11 +239,8 @@ extern "C" void *particle_allocator_hook(void *container)
     const float current = std::clamp(demand.load(std::memory_order_relaxed), 0.0F, 1.0F);
     const std::uint32_t threshold = static_cast<std::uint32_t>(current * 16777216.0F);
     if (threshold == 0) return nullptr;
-    if (threshold != 0x1000000U) {
-        const std::uint64_t count = sequence.fetch_add(1, std::memory_order_relaxed);
-        const auto sample = static_cast<std::uint32_t>(
-            mix(reinterpret_cast<std::uintptr_t>(container) + count) & 0xffffffU);
-        if (sample >= threshold) return nullptr;
+    if (threshold != 0x1000000U && sampler.sample(layer) >= threshold) {
+        return nullptr;
     }
     return allocate_original(container);
 }
@@ -250,8 +248,10 @@ extern "C" void *particle_allocator_hook(void *container)
 extern "C" void particle_spawn_hook(void *generator)
 {
     CallGuard guard;
-    if (!is_registered_generator(generator) ||
-        !profile->is_smoke(generator, image_base)) {
+    const int layer = is_registered_generator(generator)
+                          ? profile->classify_smoke(generator, image_base)
+                          : -1;
+    if (layer < 0) {
         original_spawn(generator);
         return;
     }
@@ -261,11 +261,8 @@ extern "C" void particle_spawn_hook(void *generator)
     const float current = std::clamp(demand.load(std::memory_order_relaxed), 0.0F, 1.0F);
     const std::uint32_t threshold = static_cast<std::uint32_t>(current * 16777216.0F);
     if (threshold == 0) return;
-    if (threshold != 0x1000000U) {
-        const std::uint64_t count = sequence.fetch_add(1, std::memory_order_relaxed);
-        const auto sample = static_cast<std::uint32_t>(
-            mix(reinterpret_cast<std::uintptr_t>(generator) + count) & 0xffffffU);
-        if (sample >= threshold) return;
+    if (threshold != 0x1000000U && sampler.sample(layer) >= threshold) {
+        return;
     }
     original_spawn(generator);
 }
@@ -347,7 +344,7 @@ bool install_particle_hook(const char *game_id, std::uint32_t game_version)
     for (auto &slot : generators) slot.store(nullptr, std::memory_order_relaxed);
     spawn_hook_installed = false;
     constructor_hook_installed = false;
-    sequence.store(0, std::memory_order_relaxed);
+    advance_frame();
 
     const auto constructor_patch = jump_patch(
         reinterpret_cast<void *>(&particle_generator_constructor_hook), profile->constructor_patch_size);
@@ -439,6 +436,13 @@ void set_particle_demand(float value, bool is_eligible)
     demand.store(std::clamp(std::isfinite(value) ? value : 0.0F, 0.0F, 1.0F),
                  std::memory_order_relaxed);
     eligible.store(is_eligible, std::memory_order_release);
+}
+
+void particle_hook_frame_start()
+{
+    if (active.load(std::memory_order_acquire)) {
+        advance_frame();
+    }
 }
 
 bool particle_hook_active()
