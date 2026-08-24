@@ -84,7 +84,7 @@ separate from the reverse-engineering research above.
 9. **[`mod-smoke-variants.md`](mod-smoke-variants.md)** — Clean smoke-mod presets
    - The three documented layer signatures (count, size, lifetime)
    - `smoke-mod/soft-haze` and `smoke-mod/subtle` presets
-   - `tools/build-smoke-variants.sh` packaging
+   - `smoke-mod/CMakeLists.txt` packaging (opt-in target)
    - Relationship to the shared `smoke-mod/_shared/` companion-mod tree
 
 ### 🗂️ Raw Artefacts
@@ -137,4 +137,3 @@ for (rbx = list_head; rbx != NULL; rbx += 0x40) {
 - **Author of MODGuard**: ToniVolma
 - **License**: Proprietary (not open source)
 - **Reason for reverse engineering**: The author does not provide a native Linux build. This analysis is for personal, non-commercial re-implementation on Linux systems.
-- **Authorization**: The user has written authorization to reverse engineer the binary to create a Linux port.

@@ -1,6 +1,6 @@
 # Smoke Mod Variants
 
-This document describes the clean smoke-mod presets under `smoke-mod/`, the shared companion-mod tree under `smoke-mod/_shared/`, and the packaging tool `tools/build-smoke-variants.sh`. It is the implementation reference for the playable smoke-mod archives that pair with the Linux particle hook.
+This document describes the clean smoke-mod presets under `smoke-mod/`, the shared companion-mod tree under `smoke-mod/_shared/`, and the self-contained CMake packaging system in `smoke-mod/CMakeLists.txt`. It is the implementation reference for the playable smoke-mod archives that pair with the Linux particle hook.
 
 The proprietary companion mod `PM_389_Smoke.zip` is read-only research evidence. It is never modified (see `../AGENTS.md`). Its extracted tree lives under `smoke-mod/_shared/` and is kept verbatim. The clean presets are separate source content that overlays it.
 
@@ -69,30 +69,37 @@ Both presets keep the three count/size/lifetime signatures identical to the fixt
 
 ---
 
-## 4. Packaging (`tools/build-smoke-variants.sh`)
+## 4. Packaging (`smoke-mod/CMakeLists.txt`)
 
-`tools/build-smoke-variants.sh` repackages each preset as a playable mod archive. The script does the following:
+The self-contained CMake project in `smoke-mod/CMakeLists.txt` repackages each preset as a playable mod archive. It is an opt-in build target, separate from the `modguard-linux` plugin. It uses no external `zip` binary. It uses the portable `cmake -E tar --format=zip` command.
 
-1. The script checks that the shared tree `smoke-mod/_shared/` contains `unit/hookup` and `model/particle`.
-2. For each variant in `soft-haze subtle`:
-   - It checks that the overlay has `unit/hookup/smoke_new.sii` and `model/particle/pipe.dds`.
-   - It copies the full shared tree into a temporary staging directory.
-   - It removes the `smoke_new.sii` and `pipe.dds` files from the staged copy.
-   - It copies the overlay `unit/` tree and `pipe.dds` into the staging tree.
-   - It keeps the original `pipe.tobj`. This file already references `/model/particle/pipe.dds`. The overlay overwrites this path.
-   - It zips the staged tree into `smoke-mod/build/PM_389_Smoke_<variant>.zip`.
-3. It removes the staging directory.
+At configure time, the project does this:
+
+1. It checks that the shared tree `smoke-mod/_shared/` contains `unit/hookup` and `model/particle`.
+2. For each variant in `soft-haze subtle`, it checks that the overlay has `unit/hookup/smoke_new.sii` and `model/particle/pipe.dds`.
+
+At build time, the `cmake/package_variant.cmake` script does the following for each variant:
+
+1. It copies the full shared tree into a staging directory under `smoke-mod/build-cmake/stage/<variant>/`.
+2. It removes the `smoke_new.sii` and `pipe.dds` files from the staged copy.
+3. It copies the overlay `unit/` tree and `pipe.dds` into the staging tree.
+4. It keeps the original `pipe.tobj`. This file already references `/model/particle/pipe.dds`. The overlay overwrites this path.
+5. It zips the staged tree into `smoke-mod/build-cmake/PM_389_Smoke_<variant>.zip` with `cmake -E tar --format=zip`.
+6. It removes the staging directory.
 
 Run it from the repository root:
 
 ```bash
-bash tools/build-smoke-variants.sh
+cmake -S smoke-mod -B smoke-mod/build-cmake
+cmake --build smoke-mod/build-cmake --target smoke_mod_variants
 ```
+
+To build one preset only, use the per-variant target `smoke_mod_<variant>` instead of `smoke_mod_variants`.
 
 Outputs (build artifacts, not committed):
 
-- `smoke-mod/build/PM_389_Smoke_soft-haze.zip`
-- `smoke-mod/build/PM_389_Smoke_subtle.zip`
+- `smoke-mod/build-cmake/PM_389_Smoke_soft-haze.zip`
+- `smoke-mod/build-cmake/PM_389_Smoke_subtle.zip`
 
 Enable one of these in the game mod manager. The Linux plugin does not install or modify the companion mod.
 

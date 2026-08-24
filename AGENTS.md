@@ -22,8 +22,8 @@ This repository contains reverse-engineering evidence and a native Linux reimple
 - `smoke-mod/`: the smoke mod source tree.
   - `smoke-mod/_shared/`: the extracted `PM_389_Smoke.zip` companion-mod tree. This is the shared base the variants overlay. It contains proprietary mod content kept verbatim; do not modify it.
   - `smoke-mod/soft-haze/` and `smoke-mod/subtle/`: clean replacement particle definitions and sprite texture for each preset. These are the only clean source overlays.
-  - `smoke-mod/build/`: packaged variant archives (build output, not committed).
-- `tools/build-smoke-variants.sh`: packaging tool that overlays a `smoke-mod/<variant>/` preset onto the `smoke-mod/_shared/` tree.
+  - `smoke-mod/build-cmake/`: CMake build tree that holds the packaged variant archives (build output, not committed).
+- `smoke-mod/CMakeLists.txt`: self-contained CMake packaging system. It overlays a `smoke-mod/<variant>/` preset onto the `smoke-mod/_shared/` tree. Build it with `cmake -S smoke-mod -B smoke-mod/build-cmake` and `cmake --build smoke-mod/build-cmake --target smoke_mod_variants`.
 - `modguard-linux/`: C++17 implementation of the native Linux SCS Telemetry plugin.
 - `modguard-linux/include/`: the minimal vendored SCS Telemetry SDK ABI.
 - `modguard-linux/src/`: configuration, exhaust model, plugin entry points, and particle hook.
@@ -54,6 +54,15 @@ ctest --test-dir modguard-linux/build --output-on-failure
 ```
 
 The build creates `modguard-linux/build/modguard_linux.so`. Do not commit build output.
+
+The smoke-mod variant archives are a separate, opt-in CMake project. Package them with:
+
+```bash
+cmake -S smoke-mod -B smoke-mod/build-cmake
+cmake --build smoke-mod/build-cmake --target smoke_mod_variants
+```
+
+The output is `smoke-mod/build-cmake/PM_389_Smoke_<variant>.zip`. Do not commit build output.
 
 If you change C++ code or CMake files, run the complete CTest suite. If behavior changes, add or update a focused test.
 

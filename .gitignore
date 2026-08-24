@@ -1,7 +1,7 @@
 # Build output and packaged archives
 modguard-linux/build/
 modguard-linux/build-*/
-smoke-mod/build/
+smoke-mod/build-cmake/
 
 # Opencode state
 .opencode/

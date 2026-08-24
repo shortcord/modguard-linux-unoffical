@@ -1,27 +1,68 @@
 # MODGuard Research and Linux Reimplementation
 
-This repository documents `MODGuard.dll` and contains a native Linux reimplementation for American Truck Simulator (ATS) and Euro Truck Simulator 2 (ETS2).
+This repository documents `MODGuard.dll`. It also contains a native Linux reimplementation for American Truck Simulator (ATS) and Euro Truck Simulator 2 (ETS2).
 
-MODGuard is an SCS Telemetry SDK plugin that controls the companion RealisticSmoke particle effect. The Linux plugin reads truck telemetry, calculates exhaust demand, and controls matching smoke-particle requests in the game process.
+MODGuard is an SCS Telemetry SDK plugin. It controls the companion RealisticSmoke particle effect. The Linux plugin reads truck telemetry, calculates exhaust demand, and controls matching smoke-particle requests in the game process.
 
-The repository also contains the analyzed Windows binary and companion mod as research inputs. They remain proprietary. They are not covered by the SCS SDK license.
+The repository also contains the analyzed Windows binary and the companion mod. These are research inputs. They stay proprietary. The SCS SDK license does not cover them.
+
+## Supported Game Versions
+
+| Game | Supported versions |
+| --- | --- |
+| American Truck Simulator | 1.55, 1.60 |
+| Euro Truck Simulator 2 | 1.55 |
+
+> **Why the version matters.** The plugin writes a jump instruction into the game code in memory. The location and the exact bytes differ between game versions. The plugin checks the game identity and the bytes at the target address before it changes anything. If the game version or the bytes do not match, the plugin does nothing and the smoke effect stays in its default state. A new game version can move or change the target code. When that happens, the plugin cannot attach until a new profile is added for that version.
+
+> **Note on ETS support.** I am waiting on the Coaches DLC before I upgrade my install, until then ETS support will be 1.55.x (as I don't really want to spend the time upgrading my mods just yet). Pull requests for adding 1.60.x are welcome.
+
+## Reasoning
+
+MODGuard is a DRM platform for paid mods in ATS and ETS2. The only mod on the platform, from what I can tell, is a "Realistic Exhaust Smoke" mod.
+
+This repo does not try to break the platform DRM. It reimplements only the smoke effect.
+
+<small>Realistic exhaust smoke is wanted in ETS/ATS2. To make it not cross-platform is not acceptable.</small>
+
+Compatibility with the official MODGuard plugin is limited to the smoke effect. The original client-side mod currently works but this will not be guaranteed in the future.
+
+## Overview
+
+The plugin and the mod work together to make truck exhaust smoke look real in the game.
+
+The mod is a small package of game files. It tells the game how to draw the smoke. It sets the smoke color, shape, size, and how long each puff of smoke stays in the air.
+
+The plugin is a small program that runs inside the game while you play. The game tells the plugin what the truck is doing. This includes the engine speed, the throttle, the gear, the speed, and the load. The plugin uses this data to decide how much smoke the truck should make. When the engine works hard, the plugin tells the game to make more smoke. When the engine idles, the plugin tells the game to make less smoke.
+
+The game draws the smoke as a stream of small pictures called particles. Each particle is one puff of smoke. The game makes these particles all the time while the engine runs. The plugin does not draw the smoke itself. Instead, the plugin intercepts the game at the moment it is about to spawn a particle. The plugin reads the current truck data and then decides: let the game spawn this particle, or block it. In this way, the plugin thins out the stream of particles so the smoke matches the engine load.
+
+The plugin recognizes three smoke layers. These are haze, mid, and core. Each layer has a different particle count, sprite size, and lifetime. The mod defines these layers. The plugin reads the same values to identify them. When the game asks for a particle, the plugin first checks which layer the request belongs to. If the request is not a known smoke layer, the plugin lets the game proceed unchanged.
+
+The decision uses a demand value between 0 and 1. The exhaust model calculates this value from the truck telemetry. A value of 0 blocks all particles for that request. A value of 1 lets all particles through. A value in between admits a fraction of them. To keep the decision stable across pipes, the plugin uses a deterministic sampler. For each frame, each layer, and each request in order, the sampler produces a number. If the number falls below the threshold set by the demand, the particle is admitted. Matching pipes on different exhausts receive the same decision for the same layer and ordinal. This keeps multi-pipe trucks consistent. Each pipe admits the same fraction of smoke over time.
+
+To do this, the plugin replaces a small part of the game code in memory while the game runs. The plugin writes a jump instruction at the entry of the game's particle spawn function. When the game reaches that point, the jump sends control to the plugin callback. The plugin makes its decision and then calls the original game code to finish the request. Before the plugin changes anything, it checks the game identity and the exact bytes at the target address. If the game does not match, or the bytes differ, the plugin does nothing and the game keeps its normal behavior. This keeps the game safe. When the plugin shuts down, it restores the original bytes.
+
+Without the plugin, the mod makes the same smoke all the time. With the plugin, the smoke changes with the way you drive.
 
 ## Status
 
-The Linux implementation currently provides:
+The Linux implementation gives these functions:
 
 - Native Linux SCS Telemetry SDK integration for ATS and ETS2.
-- A configurable exhaust-demand model based on throttle, RPM, speed, gear, clutch, cargo, and acceleration.
+- A configurable exhaust-demand model. The model uses throttle, RPM, speed, gear, clutch, cargo, and acceleration.
 - An in-process particle hook with version and machine-code checks.
 - Hook profiles for ATS 1.55, ATS 1.60, and ETS2 1.55.
-- Synchronized multi-pipe emission. Matching smoke layers on different pipes receive identical admission decisions.
+- Synchronized multi-pipe emission. Matching smoke layers on different pipes get identical admission decisions.
 - Non-blocking JSON diagnostics through a Unix datagram socket.
-- Two clean smoke-mod presets (soft haze and subtle modern exhaust) with a packaging tool.
-- Unit tests for the model, configuration parser, plugin ABI behavior, particle signatures, and layer admission.
+- Two clean smoke-mod presets. The presets are soft haze and subtle modern exhaust. A CMake packaging system builds them.
+- Unit tests for the model, the configuration parser, the plugin ABI, the particle signatures, and the layer admission.
 
-The plugin is only for native Linux game executables. It cannot load into a Windows game process under Proton.
+The plugin works only with native Linux game executables. It cannot load into a Windows game process under Proton.
 
 Particle-hook support is fail closed. If a game version or machine-code signature does not match, the plugin leaves the game code unchanged.
+
+> **Important Note.** If you install the mod and the smoke is constant regardless of if your engine is on or not, then you either forgot the plugin **or** are running an older/unsupported game version.
 
 ## Repository Layout
 
@@ -39,8 +80,8 @@ Particle-hook support is fail closed. If a game version or machine-code signatur
 | `reverse-enginnering/PM_389_Smoke.zip` | Proprietary companion smoke mod used for analysis. |
 | `smoke-mod/_shared/` | Extracted `PM_389_Smoke.zip` tree. Shared base the variants overlay. Kept verbatim. |
 | `smoke-mod/soft-haze/`, `smoke-mod/subtle/` | Clean replacement particle definitions and sprite texture for each preset. |
-| `smoke-mod/build/` | Packaged smoke-mod variant archives (build output, not committed). |
-| `tools/` | Helper scripts, including the smoke-variant builder. |
+| `smoke-mod/CMakeLists.txt` | Self-contained CMake packaging system for the smoke-mod variants. |
+| `smoke-mod/build-cmake/` | CMake build tree for the packaged smoke-mod variant archives. This is build output, not committed. |
 | `modguard-linux/` | Native Linux plugin source, tests, and tools. |
 | `modguard-linux/modguard_linux.ini.example` | Commented configuration template for the Linux plugin. |
 
@@ -79,7 +120,7 @@ If the game installation does not contain the plugin directory, create it. Then 
 
 Install and enable the companion smoke mod separately through the game mod manager. The Linux plugin does not install or modify the companion mod.
 
-After startup, check the game log. The plugin reports whether the telemetry client loaded. The plugin reports whether the particle hook passed its checks.
+After startup, read the game log. The plugin reports whether the telemetry client loaded. The plugin reports whether the particle hook passed its checks.
 
 ## Smoke Mod Variants
 
@@ -88,17 +129,18 @@ The companion mod `PM_389_Smoke.zip` is read-only proprietary evidence. It is ne
 - **soft-haze**: a soft natural haze with feathered sprite edges, wider lateral drift, gentle fade-in, and lowered per-sprite opacity. Overlapping sprites form the plume.
 - **subtle**: a lighter, modern exhaust with reduced opacity, gentler growth, and less visual persistence. It becomes visible mainly under load.
 
-Both presets keep the documented generator layer signatures (count, size, lifetime). The Linux particle hook still recognizes them. They also replace the smoke sprite with a feathered, edge-free soft cloud texture. This texture avoids obvious billboard boundaries. The texture keeps the same DX10 `BC3_UNORM_SRGB` format and the original `model/particle/pipe.dds` path.
+Both presets keep the documented generator layer signatures. These are count, size, and lifetime. The Linux particle hook still recognizes them. The presets also replace the smoke sprite with a feathered, edge-free soft cloud texture. This texture avoids obvious billboard boundaries. The texture keeps the same DX10 `BC3_UNORM_SRGB` format and the original `model/particle/pipe.dds` path.
 
 Build the packaged archives:
 
 ```bash
-bash tools/build-smoke-variants.sh
+cmake -S smoke-mod -B smoke-mod/build-cmake
+cmake --build smoke-mod/build-cmake --target smoke_mod_variants
 ```
 
-This copies the shared tree, overlays the variant's particle definition and sprite, and writes `smoke-mod/build/PM_389_Smoke_soft-haze.zip` and `smoke-mod/build/PM_389_Smoke_subtle.zip`. Enable one of these in the game mod manager.
+This copies the shared tree, overlays the variant particle definition and sprite, and writes two archives. The archives are `smoke-mod/build-cmake/PM_389_Smoke_soft-haze.zip` and `smoke-mod/build-cmake/PM_389_Smoke_subtle.zip`. Enable one of these in the game mod manager.
 
-Check the final visual tuning in game. The repository cannot reproduce the SCS particle renderer.
+Do the final visual tuning in game. The repository cannot reproduce the SCS particle renderer.
 
 ## Configuration
 
@@ -124,7 +166,7 @@ Missing and invalid values use safe defaults. `SmokeHook=0` disables in-process 
 
 A fully commented template is at [`modguard-linux/modguard_linux.ini.example`](modguard-linux/modguard_linux.ini.example). It contains every key, its default, and its sanitize range. Copy it to `modguard_linux.ini` in the applicable mod directory. Adjust the values as necessary.
 
-See [`modguard-linux/README.md`](modguard-linux/README.md) for plugin behavior and model details. See [`reverse-enginnering/MODGuard_RE.md`](reverse-enginnering/MODGuard_RE.md#4-configuration-ini-file) for the complete schema. See [`docs/linux-exhaust-model.md`](docs/linux-exhaust-model.md) for the full configuration table and the demand model reference.
+Read [`modguard-linux/README.md`](modguard-linux/README.md) for plugin behavior and model details. Read [`reverse-enginnering/MODGuard_RE.md`](reverse-enginnering/MODGuard_RE.md#4-configuration-ini-file) for the complete schema. Read [`docs/linux-exhaust-model.md`](docs/linux-exhaust-model.md) for the full configuration table and the demand model reference.
 
 ## Diagnostics
 
@@ -140,13 +182,13 @@ The plugin sends `exhaust_demand_v0` JSON datagrams at most ten times each secon
 
 ## Research Notes
 
-The canonical specification records the source binary hash, recovered SDK behavior, configuration schema, formulas, particle layouts, and game addresses:
+The canonical specification records the source binary hash, the recovered SDK behavior, the configuration schema, the formulas, the particle layouts, and the game addresses:
 
 - [`reverse-enginnering/MODGuard_RE.md`](reverse-enginnering/MODGuard_RE.md): current consolidated specification.
 - [`docs/README.md`](docs/README.md): index of detailed research and implementation documents.
 - [`docs/artefacts/README.md`](docs/artefacts/README.md): raw artefact descriptions and reproduction tools.
 
-Implementation documentation for the current Linux plugin and smoke-mod presets:
+Implementation documentation for the current Linux plugin and the smoke-mod presets:
 
 - [`docs/linux-plugin-architecture.md`](docs/linux-plugin-architecture.md): plugin lifecycle, events, channels, diagnostics, build, and tests.
 - [`docs/linux-exhaust-model.md`](docs/linux-exhaust-model.md): demand model and full configuration table.
@@ -157,8 +199,11 @@ Addresses and object layouts are specific to the analyzed game executables. Do n
 
 ## Legal Notice
 
-`MODGuard.dll`, `PM_389_Smoke.zip`, and extracted companion-mod files belong to their respective rights holders. Their presence supports authorized interoperability research.
+`MODGuard.dll`, `PM_389_Smoke.zip`, and the extracted companion-mod files belong to their respective rights holders. Their presence supports authorized interoperability research.
 
-The clean-room Linux implementation is separate source code. `modguard-linux/LICENSE-SCS-SDK` only covers the vendored SCS SDK definitions.
+The clean-room Linux implementation is separate source code. `modguard-linux/LICENSE-SCS-SDK` covers only the vendored SCS SDK definitions.
 
-This repository does not currently provide a license for the remaining Linux source. Copyright law reserves all rights until the maintainers add one.
+This repository does not give a license for the remaining Linux source at this time. Copyright law reserves all rights until the maintainers add one.
+
+## AI Usage Disclosure
+Most reverse enginnering and subsequent c++ development was done with the assistance of AI tooling.
