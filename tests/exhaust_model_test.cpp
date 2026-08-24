@@ -69,5 +69,37 @@ int main()
     input.rpm = 1500.0F;
     input.gear = 6;
     assert(continuous.update(input, 1.0F / 60.0F).demand > 0.0F);
+
+    // Heavy loaded combination smokes more than a light unloaded truck.
+    modguard::ExhaustModel load_model;
+    modguard::ExhaustInputs light;
+    light.engine_enabled = true;
+    light.throttle = 1.0F;
+    light.rpm = 1500.0F;
+    light.rpm_limit = 2000.0F;
+    light.gear = 6;
+    const auto light_demand = load_model.update(light, 1.0F / 60.0F).demand;
+
+    modguard::ExhaustModel heavy_model;
+    modguard::ExhaustInputs heavy = light;
+    heavy.cargo_loaded = true;
+    heavy.cargo_mass = 20000.0F;
+    const auto heavy_demand = heavy_model.update(heavy, 1.0F / 60.0F).demand;
+    assert(heavy_demand > light_demand);
+
+    // Diesel smoke concentrates at low RPM: high RPM under the same heavy load
+    // leans out to much less smoke.
+    modguard::ExhaustModel low_rpm;
+    modguard::ExhaustInputs low = heavy;
+    low.rpm = 900.0F;
+    low.rpm_limit = 2000.0F;
+    const auto low_rpm_demand = low_rpm.update(low, 1.0F / 60.0F).demand;
+
+    modguard::ExhaustModel high_rpm;
+    modguard::ExhaustInputs hi = heavy;
+    hi.rpm = 1900.0F;
+    hi.rpm_limit = 2000.0F;
+    const auto high_rpm_demand = high_rpm.update(hi, 1.0F / 60.0F).demand;
+    assert(low_rpm_demand > high_rpm_demand);
     return 0;
 }

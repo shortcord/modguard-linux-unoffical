@@ -119,13 +119,38 @@ ExhaustOutput ExhaustModel::update(const ExhaustInputs &raw, float delta_seconds
         smoke += 0.15F * throttle * config_.launch_weight;
     }
 
-    // Cargo effect
-    const float cargo = raw.cargo_loaded
-        ? clamp01(raw.cargo_mass / 40000.0F) : 0.0F;
-    smoke *= 1.0F + 0.25F * cargo * config_.load_sensitivity;
+    // Gross weight: truck curb weight plus the trailer and cargo when attached.
+    const bool loaded = raw.cargo_loaded;
+    const float payload = loaded
+        ? std::max(0.0F, config_.trailer_mass_kg) + std::max(0.0F, raw.cargo_mass)
+        : 0.0F;
+    const float gross = std::max(0.0F, config_.truck_mass_kg) + payload;
 
-    // Apply config scaling
+    // Load gate rises steeply with total weight: an unloaded truck stays at a low
+    // baseline, while a heavy, loaded combination approaches full smoke.
+    const float gross_reference = std::max(config_.gross_weight_reference_kg, 1.0F);
+    const float gross_norm = clamp01(gross / gross_reference);
+    const float load_gate = lerp(std::clamp(config_.load_baseline, 0.0F, 1.0F), 1.0F,
+                                 std::pow(gross_norm, std::max(config_.load_curve_power, 0.1F)));
+
+    // Throttle and RPM shape the puff. Diesel smoke comes from over-fueling,
+    // which happens mainly at low RPM under high throttle; the plume leans out
+    // (drops sharply) as engine speed rises through mid and high ends.
+    const float throttle_gate = std::pow(throttle_smoothed_, std::clamp(config_.throttle_gate_power, 0.1F, 5.0F));
+    const float rpm_norm_gate = std::clamp(rpm_norm, 0.0F, 1.0F);
+    const float rpm_lean_fraction = std::clamp(config_.rpm_lean_fraction, 0.1F, 1.0F);
+    const float rpm_gate = std::pow(1.0F - std::clamp(rpm_norm_gate / rpm_lean_fraction, 0.0F, 1.0F),
+                                    std::clamp(config_.rpm_lean_power, 0.1F, 5.0F));
+
+    smoke *= load_gate * throttle_gate * rpm_gate;
     smoke *= config_.intensity * config_.final_smoke_multiplier;
+
+    // Heavy-load top end: the emission ceiling climbs with gross weight so a
+    // loaded, working truck can reach far more smoke than a light one. The load
+    // curve already suppresses the light baseline; this lift widens the spread.
+    const float load_boost = lerp(std::max(0.0F, config_.load_boost_min),
+                                  std::max(0.0F, config_.load_boost_max), load_gate);
+    smoke *= load_boost * std::max(0.0F, config_.load_sensitivity) + (1.0F - std::max(0.0F, config_.load_sensitivity));
 
     if (config_.continuous_smoke) {
         smoke = std::max(smoke, 0.05F * std::max(0.0F, config_.intensity)

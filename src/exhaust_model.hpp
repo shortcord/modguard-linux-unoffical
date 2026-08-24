@@ -11,6 +11,16 @@ struct ExhaustConfig {
     float final_smoke_multiplier = 0.8F;
     float intensity = 0.3F;
     float load_sensitivity = 1.0F;
+    float truck_mass_kg = 8000.0F;
+    float trailer_mass_kg = 6000.0F;
+    float load_curve_power = 1.8F;
+    float gross_weight_reference_kg = 36000.0F;
+    float load_baseline = 0.15F;
+    float throttle_gate_power = 1.5F;
+    float rpm_lean_fraction = 0.6F;
+    float rpm_lean_power = 1.2F;
+    float load_boost_min = 0.6F;
+    float load_boost_max = 2.6F;
     float attack_smoothness = 0.3F;
     float release_smoothness = 0.3F;
     float event_strength = 1.0F;
