@@ -6,11 +6,3 @@
 *.jpg   filter=lfs diff=lfs merge=lfs -text
 *.dll   filter=lfs diff=lfs merge=lfs -text
 *.zip   filter=lfs diff=lfs merge=lfs -text
-*.dds filter=lfs diff=lfs merge=lfs -text
-*.tobj filter=lfs diff=lfs merge=lfs -text
-*.pmd filter=lfs diff=lfs merge=lfs -text
-*.pmg filter=lfs diff=lfs merge=lfs -text
-*.pmc filter=lfs diff=lfs merge=lfs -text
-*.jpg filter=lfs diff=lfs merge=lfs -text
-*.dll filter=lfs diff=lfs merge=lfs -text
-*.zip filter=lfs diff=lfs merge=lfs -text
