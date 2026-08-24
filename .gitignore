@@ -1,5 +1,14 @@
-build/
-build-*/
+# Build output and packaged archives
+modguard-linux/build/
+modguard-linux/build-*/
+smoke-mod/build/
+
+# Opencode state
+.opencode/
+
+# Editor config
+.vscode/
+
+# Python bytecode
 __pycache__/
 *.py[cod]
-.opencode/

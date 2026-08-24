@@ -1,0 +1,22 @@
+[orange]PM 389 Smoke
+
+[white]Smoke add-on for the Pizzster Modding Peterbilt 389.
+
+Adds exhaust smoke effects and allows MODGuard.dll to control particle emissions based on engine operation.
+
+[green]Smoke behavior:
+[white]- Smoke intensity responds to throttle input and engine load.
+
+* Smoke output decreases when the throttle is released.
+* The engine brake and retarder do not interrupt smoke emission while the engine is under throttle.
+* Higher engine wear increases smoke output.
+
+[orange]Requirements:
+[white]- Pizzster Modding Peterbilt 389 MegaPack.
+
+* MODGuard plugin installed and loaded by American Truck Simulator.
+
+[orange]Load order:
+[white]Place PM 389 Smoke above the main Peterbilt 389 mod in the Mod Manager.
+
+[red]This package is an add-on. It does not include the complete Peterbilt 389 truck.

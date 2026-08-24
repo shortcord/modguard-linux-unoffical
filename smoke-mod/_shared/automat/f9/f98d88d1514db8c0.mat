@@ -1,0 +1,15 @@
+effect : "eut2.dif.spec.tsnmap.rfx" {
+	additional_ambient : 0.000000
+	diffuse : { 0.380056 , 0.380056 , 0.380056 }
+	reflection : 0.000000
+	shininess : 100.000000
+	specular : { 0.242867 , 0.242867 , 0.242867 }
+	texture : "texture_base" {
+		source : "/vehicle/truck/kenworth_t680/chrome.tobj"
+		sampler : default
+	}
+	texture : "texture_nmap" {
+		source : "/vehicle/truck/kenworth_t680/chrome_n.tobj"
+		sampler : default
+	}
+}

@@ -1,0 +1,124 @@
+SiiNunit
+{
+model_particle : model.particle.smoke_new {
+ active_distance: 220
+ gen_array: 3
+ gen_array[0]: _nameless.208.53FC
+ gen_array[1]: _nameless.208.53FD
+ gen_array[2]: _nameless.208.53FE
+ auto_disable_delay: 0
+}
+
+particle_gen : _nameless.208.53FC {
+ list_order_up: false
+ blend_alpha: true
+ gen_pos: (0, 0, 0)
+ rotation_speed: 1.20
+ alpha_blend_coef: 0.40
+ base_alpha: 0.85
+ alpha_attack_time: 0
+ flow_speed: (0, 1.5, -2.5)
+ flow_speed_acc: (0, 0.10, 0.30)
+ particle_size: (0.090, 0.090)
+ particle_size_var: (0.040, 0.040)
+
+ scale_acc: 0.38
+
+ particle_displacement: (0.010, 0.015, 0.010)
+ color_multiplier: nil
+ key_pos: 5
+ key_pos[0]: 0
+ key_pos[1]: 38
+ key_pos[2]: 96
+ key_pos[3]: 168
+ key_pos[4]: 255
+ key_color: 5
+ key_color[0]: 0
+ key_color[1]: 1052688
+ key_color[2]: 2105376
+ key_color[3]: 4210752
+ key_color[4]: 8421504
+ time_to_live: 3
+ time_to_live_rand: 0.70
+ particles_max_count: 40
+ model_path: "/model/particle/smoke.pmd"
+ model_look: pipe
+ relative_space: false	
+ use_sprites: true
+}
+
+
+particle_gen : _nameless.208.53FD {
+ list_order_up: false
+ blend_alpha: true
+ gen_pos: (0, 0, 0)
+ rotation_speed: -1.40
+ alpha_blend_coef: 0.35
+ base_alpha: 0.70
+ alpha_attack_time: 0
+ flow_speed: (0, 1, -2)
+ flow_speed_acc: (-0.07, 0.12, 0.28)
+ particle_size: (0.040, 0.040)
+ particle_size_var: (0.030, 0.030)
+ scale_acc: 0.28
+ particle_displacement: (0.010, 0.015, 0.010)
+ color_multiplier: nil
+ key_pos: 5
+ key_pos[0]: 0
+ key_pos[1]: 34
+ key_pos[2]: 90
+ key_pos[3]: 160
+ key_pos[4]: 255
+ key_color: 5
+ key_color[0]: 0
+ key_color[1]: 1052688
+ key_color[2]: 2105376
+ key_color[3]: 4210752
+ key_color[4]: 8421504
+ time_to_live: 0.7
+ time_to_live_rand: 0.50
+ particles_max_count: 20
+ model_path: "/model/particle/smoke.pmd"
+ model_look: pipe
+ relative_space: false
+ use_sprites: true
+}
+
+
+particle_gen : _nameless.208.53FE {
+ list_order_up: false
+ blend_alpha: true
+ gen_pos: (0, 0, 0)
+ rotation_speed: 0.85
+ alpha_blend_coef: 0.25
+ base_alpha: 0.55
+ alpha_attack_time: 0
+ flow_speed: (0, 0.5, -0.5)
+ flow_speed_acc: (0.07, 0.11, 0.29)
+ particle_size: (0.020, 0.020)
+ particle_size_var: (0.010, 0.010)
+ scale_acc: 0.32
+ particle_displacement: (0.010, 0.015, 0.010)
+ color_multiplier: nil
+ key_pos: 5
+ key_pos[0]: 0
+ key_pos[1]: 36
+ key_pos[2]: 92
+ key_pos[3]: 164
+ key_pos[4]: 255
+ key_color: 5
+ key_color[0]: 0
+ key_color[1]: 1052688
+ key_color[2]: 2105376
+ key_color[3]: 4210752
+ key_color[4]: 8421504
+ time_to_live: 0.2
+ time_to_live_rand: 0.40
+ particles_max_count: 4
+ model_path: "/model/particle/smoke.pmd"
+ model_look: pipe
+ relative_space: true
+ use_sprites: true
+}
+
+}

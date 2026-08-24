@@ -1,0 +1,17 @@
+SiiNunit
+{
+mod_package : .package_name
+{
+    package_version: "1.0"
+    display_name: "PM 389 Smoke"
+    author: "ToniVolma"
+
+    category[]: "truck"
+
+    icon: "image.jpg"
+    description_file: "mod_description.txt"
+
+    mp_visible: true
+    mp_mod_optional: true
+}
+}

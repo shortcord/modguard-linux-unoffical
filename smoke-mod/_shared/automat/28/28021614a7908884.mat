@@ -1,0 +1,27 @@
+effect : "eut2.dif.spec.add.env.nofresnel.tsnmap.rfx" {
+	additional_ambient : 0.000000
+	diffuse : { 0.250545 , 0.250545 , 0.250545 }
+	env_factor : { 0.477626 , 0.477626 , 0.477626 }
+	reflection : 0.000000
+	shininess : 100.000000
+	specular : { 1.000000 , 1.000000 , 1.000000 }
+	texture : "texture_base" {
+		source : "/vehicle/truck/kenworth_w900/w900_chrome_clr.tobj"
+		u_address : clamp
+		v_address : clamp
+	}
+	texture : "texture_nmap" {
+		source : "/vehicle/truck/kenworth_w900/w900_chrome_nm.tobj"
+		u_address : clamp
+		v_address : clamp
+	}
+	texture : "texture_reflection" {
+		source : "/material/environment/vehicle_reflection.tobj"
+		min_filter : linear
+		mag_filter : linear
+		mip_filter : linear
+		u_address : clamp
+		v_address : clamp
+		w_address : clamp
+	}
+}
