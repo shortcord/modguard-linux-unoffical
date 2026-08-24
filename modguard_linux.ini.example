@@ -1,0 +1,128 @@
+; MODGuard Linux — RealisticSmoke configuration template.
+;
+; Copy this file to modguard_linux.ini in the game mod directory and adjust:
+;   ~/.local/share/American Truck Simulator/mod/modguard_linux.ini
+;   ~/.local/share/Euro Truck Simulator 2/mod/modguard_linux.ini
+;
+; Or set the MODGUARD_CONFIG environment variable to an absolute file path.
+;
+; Keys are case-sensitive and must live under [RealisticSmoke]. Missing or
+; invalid values fall back to the defaults shown below. Inline comments after
+; a value (using ; or #) are allowed. Booleans accept 1/true/yes/on and
+; 0/false/no/off (case-insensitive).
+;
+; This template mirrors the defaults in src/exhaust_model.hpp and the sanitize
+; ranges in src/config.cpp. See docs/linux-exhaust-model.md for the full
+; reference.
+
+[RealisticSmoke]
+
+; --- Hook and behavior ---
+
+; Enables in-process particle control. 0 keeps telemetry and diagnostics
+; active but admits no particles.
+SmokeHook=1
+
+; Keeps a faint baseline of smoke while the engine is running.
+ContinuousSmoke=0
+
+; --- Global scaling ---
+
+; Master smoke scale applied after all gates.
+Intensity=0.3
+
+; Final multiplier applied to the combined smoke value.
+FinalSmokeMultiplier=0.8
+
+; Strength of the heavy-load top-end boost. Higher widens the gap between a
+; light truck and a loaded combination.
+LoadSensitivity=1.0
+
+; --- Weight and load gate ---
+
+; Curb weight of the truck, in kilograms. Range [0, 50000].
+TruckMassKg=8000
+
+; Weight of the trailer when attached, in kilograms. Range [0, 50000].
+TrailerMassKg=6000
+
+; Steepness of the gross-weight smoke curve. Range [0.1, 10].
+LoadCurvePower=1.8
+
+; Gross weight, in kilograms, at which the load gate saturates.
+; Range [1, 1000000].
+GrossWeightReferenceKg=36000
+
+; Smoke fraction for an unloaded, empty truck. Range [0, 1].
+LoadBaseline=0.15
+
+; Low end of the heavy-load emission boost. Range [0, 100].
+LoadBoostMin=0.6
+
+; High end of the heavy-load emission boost. Range [0, 100].
+LoadBoostMax=2.6
+
+; --- Throttle and RPM shaping ---
+
+; How strongly demand follows the throttle. Range [0.1, 5].
+ThrottleGatePower=1.5
+
+; RPM fraction (of the RPM limit) at which smoke reaches zero. Range [0.1, 1].
+RpmLeanFraction=0.6
+
+; Sharpness of the high-RPM lean-out. Range [0.1, 5].
+RpmLeanPower=1.2
+
+; --- Smoothing and transients ---
+
+; Throttle rise time constant, in seconds. Must be >= 0.
+AttackSmoothness=0.3
+
+; Throttle fall time constant, in seconds. Must be >= 0.
+ReleaseSmoothness=0.3
+
+; Strength of the throttle-rate (turbo-lag) puff.
+ThrottleTransientStrength=0.7
+
+; Throttle rise fraction that triggers a transient puff. Range [0, 1].
+ThrottleRiseThreshold=0.05
+
+; Decay rate of the throttle transient. Must be >= 0.
+ThrottleTransientDecay=0.1
+
+; Weight of the gear-shift puff.
+ShiftWeight=1.0
+
+; Weight of the stationary-launch puff.
+LaunchWeight=1.0
+
+; --- Event and peak ---
+
+; Strength of sustained-throttle events. (Reserved; parsed, not currently
+; active in the Linux pipeline.)
+EventStrength=1.0
+
+; Strength of the sustained-throttle contribution. (Reserved; parsed, not
+; currently active in the Linux pipeline.)
+SustainedThrottleStrength=0.5
+
+; Per-frame decay fraction of the session peak. Range [0, 1].
+SessionPeakPercent=0.85
+
+; --- Throttle curve and component weights ---
+;
+; These keys are parsed and clamped so the schema stays compatible with the
+; analyzed Windows plugin, but the current Linux pipeline does not read them.
+; They are accepted without error and safe to omit.
+
+ThrottleCurve=45
+ThrottleWeight=1.0
+RpmWeight=1.0
+SpeedWeight=1.0
+AccelerationWeight=1.0
+GearWeight=1.0
+ClutchWeight=1.0
+CargoWeight=1.0
+TractionAccelerationWeight=1.0
+LoadEffortWeight=1.0
+FreeRevWeight=1.0

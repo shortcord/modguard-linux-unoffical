@@ -84,6 +84,13 @@ original list allocator. Existing particles and particle fields are not changed.
 The plugin attempts to restore the original bytes during telemetry shutdown and
 keeps its trampoline mapped if restoration fails.
 
+Multi-pipe setups emit consistently because admission is synchronized per layer.
+Each frame, every recognized smoke layer draws its decisions from a shared
+per-layer ordinal mixed with the frame number. Corresponding generators on
+different pipes receive the identical admission decision, so they produce the
+same amount of smoke over time. Sprite position, rotation, lifetime, and size
+randomization remain independent, preserving a natural appearance.
+
 ## Configuration
 
 The plugin reads `modguard_linux.ini` from the game's `mod` directory:
@@ -93,10 +100,29 @@ The plugin reads `modguard_linux.ini` from the game's `mod` directory:
 ~/.local/share/Euro Truck Simulator 2/mod/modguard_linux.ini
 ```
 
-Set `MODGUARD_CONFIG` to an explicit file path to override this location. The
-supported `[RealisticSmoke]` keys and defaults match `../MODGuard_RE.md`.
+Set `MODGUARD_CONFIG` to an explicit file path to override this location. A
+fully commented template with every key and its default is at
+[`modguard_linux.ini.example`](modguard_linux.ini.example). Copy it to
+`modguard_linux.ini` in the applicable mod directory and adjust as needed.
+
+The supported `[RealisticSmoke]` keys and defaults match `../MODGuard_RE.md`.
 `SmokeHook=0` disables the in-process particle hook. `ContinuousSmoke=1` keeps a small baseline
 while the engine is running.
+
+Load-specific keys (also under `[RealisticSmoke]`):
+
+- `TruckMassKg` (default `8000`) curb weight of the truck.
+- `TrailerMassKg` (default `6000`) weight of the trailer when attached.
+- `LoadCurvePower` (default `1.8`) steepness of the gross-weight smoke curve.
+- `LoadSensitivity` (default `1.0`) strength of the heavy-load top-end boost.
+- `GrossWeightReferenceKg` (default `36000`) gross weight at which the load gate
+  saturates.
+- `LoadBaseline` (default `0.15`) smoke fraction for an unloaded, empty truck.
+- `ThrottleGatePower` (default `1.5`) how strongly demand follows the throttle.
+- `RpmLeanFraction` (default `0.6`) RPM fraction at which smoke reaches zero.
+- `RpmLeanPower` (default `1.2`) sharpness of the high-RPM lean-out.
+- `LoadBoostMin` / `LoadBoostMax` (default `0.6` / `2.6`) low and high ends of
+  the heavy-load emission boost.
 
 ## Model Scope
 
@@ -107,8 +133,27 @@ terms. `demand` is clamped to `[0,1]` for particle admission; `raw_demand` is
 retained for diagnostics. Inputs are clamped to safe ranges and engine-off
 output is zero.
 
+Gross weight gates the smoke. Total weight (truck curb mass plus trailer and
+`cargo.mass` when `cargo.loaded`) is normalized and raised to `LoadCurvePower`
+to form a load gate: a light, unloaded truck stays near a faint baseline, while
+a heavy, loaded combination can reach high emission. The demand is also scaled
+by throttle and concentrated at low RPM: diesel smoke represents over-fueling,
+which happens mainly at low RPM under high throttle, so the plume leans out
+sharply as engine speed rises through the mid and high end. `LoadSensitivity`
+widens the gap so a heavily loaded truck under load smokes substantially more
+than the baseline.
+
+The SCS Telemetry SDK exposes no direct vehicle-weight channel, so truck and
+empty-trailer weight are configured statically and cargo is read from telemetry.
+
 No 100/2500/10000 particle bucket is emitted. Those values are the original
 plugin's RPM-limit minimum, default, and maximum, not a smoke-output scale.
 
 The canonical research reference is `../MODGuard_RE.md`. Files under `../docs/`
-contain earlier hypotheses and may not include later corrections.
+contain earlier hypotheses and may not include later corrections. The current
+implementation is documented in:
+
+- [`../docs/linux-plugin-architecture.md`](../docs/linux-plugin-architecture.md) — plugin lifecycle, events, channels, diagnostics, build, and tests.
+- [`../docs/linux-exhaust-model.md`](../docs/linux-exhaust-model.md) — the demand model and the full configuration table.
+- [`../docs/linux-particle-hook.md`](../docs/linux-particle-hook.md) — the inline game-memory hook and admission sampler.
+- [`../docs/mod-smoke-variants.md`](../docs/mod-smoke-variants.md) — the clean smoke-mod presets and packaging.
