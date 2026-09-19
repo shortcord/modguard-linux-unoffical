@@ -37,11 +37,57 @@ void set_ats160_layer(std::vector<std::uint8_t> &generator, std::int32_t count, 
     write(generator, 0x62c, lifetime);
 }
 
+void set_ats161_layer(std::vector<std::uint8_t> &generator, std::int32_t count, float size, float lifetime)
+{
+    write(generator, 0x630, count);
+    write(generator, 0x54, size);
+    write(generator, 0x58, size);
+    write(generator, 0x62c, lifetime);
+}
+
 } // namespace
 
 int main()
 {
     constexpr std::uintptr_t base = 0x10000000;
+    const std::uint8_t expected_build_id[] = {0x7f, 0xa4, 0xc9, 0xe7};
+    std::uint8_t actual_build_id[] = {0x7f, 0xa4, 0xc9, 0xe7};
+    assert(modguard::particle_build_id_matches(actual_build_id, sizeof(actual_build_id),
+                                               expected_build_id, sizeof(expected_build_id)));
+    actual_build_id[3] ^= 0xff;
+    assert(!modguard::particle_build_id_matches(actual_build_id, sizeof(actual_build_id),
+                                                expected_build_id, sizeof(expected_build_id)));
+    assert(!modguard::particle_build_id_matches(expected_build_id, sizeof(expected_build_id) - 1,
+                                                 expected_build_id, sizeof(expected_build_id)));
+
+    const std::uint8_t pinned_build_id[] = {0xbb, 0xad, 0x4a, 0xec};
+    const modguard::ParticleProfileIdentity profiles[] = {
+        {"ats", 0x00010006, 0x00010006, nullptr, 0},
+        {"ats", 0x00010006, 0x00010006, pinned_build_id, sizeof(pinned_build_id)},
+        {"eut2", 0x00010013, 0x00010013, expected_build_id, sizeof(expected_build_id)},
+    };
+    assert(modguard::select_particle_profile(
+               profiles, 3, "ats", 0x00010006, pinned_build_id,
+               sizeof(pinned_build_id)) == 1);
+    assert(modguard::select_particle_profile(
+               profiles, 3, "ats", 0x00010006, expected_build_id,
+               sizeof(expected_build_id)) == 0);
+    assert(modguard::select_particle_profile(
+               profiles, 3, "ats", 0x00010007, pinned_build_id,
+               sizeof(pinned_build_id)) == 1);
+    assert(modguard::select_particle_profile(
+               profiles + 1, 1, "ats", 0x00010006, expected_build_id,
+               sizeof(expected_build_id)) == modguard::no_particle_profile);
+    assert(modguard::select_particle_profile(
+               profiles, 1, "ats", 0x00010007, expected_build_id,
+               sizeof(expected_build_id)) == modguard::no_particle_profile);
+    assert(modguard::select_particle_profile(
+               profiles, 3, "unsupported", 0x00010007, pinned_build_id,
+               sizeof(pinned_build_id)) == modguard::no_particle_profile);
+    assert(modguard::select_particle_profile(
+               nullptr, 0, "ats", 0x00010006, pinned_build_id,
+               sizeof(pinned_build_id)) == modguard::no_particle_profile);
+
     std::vector<std::uint8_t> ets2_generator(0x1968);
     write(ets2_generator, 0, base + 0x2c99180);
     write(ets2_generator, 0x558, base + 0x2c99150);
@@ -62,6 +108,20 @@ int main()
     write(ets2_generator, 0, base + 0x2c99180);
     write(ets2_generator, 0x558, base + 1);
     assert(!modguard::is_ets2_155_smoke_container(ets2_container, base));
+
+    std::vector<std::uint8_t> ets2_160_generator(0x700);
+    write(ets2_160_generator, 0, base + 0x2d0f600);
+    set_ats160_layer(ets2_160_generator, 40, 0.090F, 3.0F);
+    assert(modguard::is_ets2_160_smoke_generator(ets2_160_generator.data(), base));
+    set_ats160_layer(ets2_160_generator, 20, 0.040F, 0.7F);
+    assert(modguard::is_ets2_160_smoke_generator(ets2_160_generator.data(), base));
+    set_ats160_layer(ets2_160_generator, 4, 0.020F, 0.2F);
+    assert(modguard::is_ets2_160_smoke_generator(ets2_160_generator.data(), base));
+    set_ats160_layer(ets2_160_generator, 60, 0.040F, 2.0F);
+    assert(!modguard::is_ets2_160_smoke_generator(ets2_160_generator.data(), base));
+    write(ets2_160_generator, 0, base + 1);
+    set_ats160_layer(ets2_160_generator, 40, 0.090F, 3.0F);
+    assert(!modguard::is_ets2_160_smoke_generator(ets2_160_generator.data(), base));
 
     std::vector<std::uint8_t> ats_generator(0x1a68);
     write(ats_generator, 0, base + 0x2d15040);
@@ -95,6 +155,64 @@ int main()
     write(ats160_generator, 0, base + 1);
     set_ats160_layer(ats160_generator, 40, 0.090F, 3.0F);
     assert(!modguard::is_ats_160_smoke_generator(ats160_generator.data(), base));
+
+    std::vector<std::uint8_t> ats161_generator(0x700);
+    write(ats161_generator, 0, base + 0x2e41fc8);
+    set_ats161_layer(ats161_generator, 40, 0.090F, 3.0F);
+    auto inspection = modguard::inspect_ats_161_smoke_generator(ats161_generator.data(), base);
+    assert(inspection.base_vtable);
+    assert(!inspection.emitter_vtable);
+    assert(inspection.count_match);
+    assert(inspection.size_match);
+    assert(inspection.lifetime_match);
+    assert(inspection.layer == 0);
+    assert(modguard::is_ats_161_smoke_generator(ats161_generator.data(), base));
+    set_ats161_layer(ats161_generator, 20, 0.040F, 0.7F);
+    assert(modguard::classify_ats_161_smoke_generator(ats161_generator.data(), base) == 1);
+    set_ats161_layer(ats161_generator, 4, 0.020F, 0.2F);
+    assert(modguard::classify_ats_161_smoke_generator(ats161_generator.data(), base) == 2);
+    set_ats161_layer(ats161_generator, 60, 0.040F, 2.0F);
+    assert(!modguard::is_ats_161_smoke_generator(ats161_generator.data(), base));
+    write(ats161_generator, 0, base + 0x2e416f8);
+    set_ats161_layer(ats161_generator, 40, 0.090F, 3.0F);
+    inspection = modguard::inspect_ats_161_smoke_generator(ats161_generator.data(), base);
+    assert(!inspection.base_vtable);
+    assert(inspection.emitter_vtable);
+    assert(inspection.layer == 0);
+    assert(!modguard::is_ats_161_smoke_generator(ats161_generator.data(), base));
+    write(ats161_generator, 0, base + 0x2e41fc8);
+    set_ats161_layer(ats161_generator, 60, 0.090F, 3.0F);
+    inspection = modguard::inspect_ats_161_smoke_generator(ats161_generator.data(), base);
+    assert(!inspection.count_match);
+    assert(inspection.size_match);
+    assert(inspection.lifetime_match);
+    assert(inspection.layer == -1);
+    set_ats161_layer(ats161_generator, 40, 0.080F, 3.0F);
+    inspection = modguard::inspect_ats_161_smoke_generator(ats161_generator.data(), base);
+    assert(inspection.count_match);
+    assert(!inspection.size_match);
+    assert(inspection.lifetime_match);
+    assert(inspection.layer == -1);
+    set_ats161_layer(ats161_generator, 40, 0.090F, 2.0F);
+    inspection = modguard::inspect_ats_161_smoke_generator(ats161_generator.data(), base);
+    assert(inspection.count_match);
+    assert(inspection.size_match);
+    assert(!inspection.lifetime_match);
+    assert(inspection.layer == -1);
+    set_ats161_layer(ats161_generator, 40, 0.040F, 0.7F);
+    inspection = modguard::inspect_ats_161_smoke_generator(ats161_generator.data(), base);
+    assert(inspection.count_match);
+    assert(inspection.size_match);
+    assert(inspection.lifetime_match);
+    assert(inspection.layer == -1);
+    // The obsolete +0x58/+0x5c pair must not classify. +0x5c is
+    // particle_size_var, not the size, so the pair is asymmetric.
+    set_ats161_layer(ats161_generator, 40, 0.5F, 3.0F);
+    write(ats161_generator, 0x58, 0.090F);
+    write(ats161_generator, 0x5c, 0.090F);
+    assert(!modguard::is_ats_161_smoke_generator(ats161_generator.data(), base));
+    write(ats161_generator, 0, base + 1);
+    assert(!modguard::is_ats_161_smoke_generator(ats161_generator.data(), base));
 
     return 0;
 }

@@ -55,6 +55,22 @@ int classify_ets2_155_smoke_container(const void *container_pointer, std::uintpt
                        read<float>(generator + 0x524));
 }
 
+int classify_ets2_160_smoke_generator(const void *generator_pointer, std::uintptr_t image_base)
+{
+    if (!generator_pointer) {
+        return -1;
+    }
+    const auto *generator = static_cast<const std::uint8_t *>(generator_pointer);
+    if (read<std::uintptr_t>(generator) != image_base + 0x2d0f600) {
+        return -1;
+    }
+
+    return smoke_layer(read<std::int32_t>(generator + 0x630),
+                       read<float>(generator + 0x58),
+                       read<float>(generator + 0x5c),
+                       read<float>(generator + 0x62c));
+}
+
 int classify_ats_155_smoke_container(const void *container_pointer, std::uintptr_t image_base)
 {
     if (!container_pointer) {
@@ -89,9 +105,45 @@ int classify_ats_160_smoke_generator(const void *generator_pointer, std::uintptr
                        read<float>(generator + 0x62c));
 }
 
+int classify_ats_161_smoke_generator(const void *generator_pointer, std::uintptr_t image_base)
+{
+    const auto inspection = inspect_ats_161_smoke_generator(generator_pointer, image_base);
+    return inspection.base_vtable ? inspection.layer : -1;
+}
+
+Ats161SmokeInspection inspect_ats_161_smoke_generator(
+    const void *generator_pointer, std::uintptr_t image_base)
+{
+    if (!generator_pointer) {
+        return {};
+    }
+    const auto *generator = static_cast<const std::uint8_t *>(generator_pointer);
+    const auto vtable = read<std::uintptr_t>(generator);
+    const auto count = read<std::int32_t>(generator + 0x630);
+    const auto size_x = read<float>(generator + 0x54);
+    const auto size_y = read<float>(generator + 0x58);
+    const auto lifetime = read<float>(generator + 0x62c);
+    const int layer = smoke_layer(count, size_x, size_y, lifetime);
+    return {
+        vtable == image_base + 0x2e41fc8,
+        vtable == image_base + 0x2e416f8,
+        count == 40 || count == 20 || count == 4,
+        (near(size_x, 0.090F) && near(size_y, 0.090F)) ||
+            (near(size_x, 0.040F) && near(size_y, 0.040F)) ||
+            (near(size_x, 0.020F) && near(size_y, 0.020F)),
+        near(lifetime, 3.0F) || near(lifetime, 0.7F) || near(lifetime, 0.2F),
+        layer,
+    };
+}
+
 bool is_ets2_155_smoke_container(const void *container, std::uintptr_t image_base)
 {
     return classify_ets2_155_smoke_container(container, image_base) >= 0;
+}
+
+bool is_ets2_160_smoke_generator(const void *generator, std::uintptr_t image_base)
+{
+    return classify_ets2_160_smoke_generator(generator, image_base) >= 0;
 }
 
 bool is_ats_155_smoke_container(const void *container, std::uintptr_t image_base)
@@ -102,6 +154,49 @@ bool is_ats_155_smoke_container(const void *container, std::uintptr_t image_base
 bool is_ats_160_smoke_generator(const void *generator, std::uintptr_t image_base)
 {
     return classify_ats_160_smoke_generator(generator, image_base) >= 0;
+}
+
+bool is_ats_161_smoke_generator(const void *generator, std::uintptr_t image_base)
+{
+    return classify_ats_161_smoke_generator(generator, image_base) >= 0;
+}
+
+bool particle_build_id_matches(const std::uint8_t *actual, std::size_t actual_size,
+                               const std::uint8_t *expected, std::size_t expected_size)
+{
+    return actual && expected && actual_size == expected_size && expected_size != 0 &&
+           std::memcmp(actual, expected, expected_size) == 0;
+}
+
+std::size_t select_particle_profile(const ParticleProfileIdentity *profiles,
+                                    std::size_t profile_count, const char *game_id,
+                                    std::uint32_t game_version,
+                                    const std::uint8_t *build_id,
+                                    std::size_t build_id_size)
+{
+    if (!profiles || !game_id) {
+        return no_particle_profile;
+    }
+
+    std::size_t fallback = no_particle_profile;
+    for (std::size_t index = 0; index < profile_count; ++index) {
+        const auto &candidate = profiles[index];
+        if (!candidate.game_id || std::strcmp(game_id, candidate.game_id) != 0) {
+            continue;
+        }
+        if (candidate.expected_build_id) {
+            if (particle_build_id_matches(build_id, build_id_size,
+                                          candidate.expected_build_id,
+                                          candidate.expected_build_id_size)) {
+                return index;
+            }
+        } else if (game_version >= candidate.min_version &&
+                   game_version <= candidate.max_version &&
+                   fallback == no_particle_profile) {
+            fallback = index;
+        }
+    }
+    return fallback;
 }
 
 } // namespace modguard
