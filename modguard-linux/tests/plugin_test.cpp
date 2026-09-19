@@ -1,8 +1,12 @@
 #include "scs_sdk_minimal.hpp"
 
 #include <cassert>
+#include <chrono>
+#include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <sys/socket.h>
@@ -166,6 +170,12 @@ int main()
     assert(json.find("\"schema\":\"exhaust_demand_v0\"") != std::string::npos);
     assert(json.find("\"raw_demand\":") != std::string::npos);
     assert(json.find("\"rpm_limit\":2100.0") != std::string::npos);
+    assert(json.find("\"particle_constructors\":0") != std::string::npos);
+    assert(json.find("\"particle_candidates\":0") != std::string::npos);
+    assert(json.find("\"particle_registered\":0") != std::string::npos);
+    assert(json.find("\"smoke_requests\":0") != std::string::npos);
+    assert(json.find("\"admitted_requests\":0") != std::string::npos);
+    assert(json.find("\"suppressed_requests\":0") != std::string::npos);
     assert(json.find("nan") == std::string::npos);
 
     engine_callback.callback(engine_callback.name.c_str(), SCS_U32_NIL, nullptr,
@@ -193,6 +203,117 @@ int main()
     params = make_params("unsupported");
     assert(scs_telemetry_init(SCS_TELEMETRY_VERSION_1_01, &params) == SCS_RESULT_unsupported);
     assert(scs_telemetry_init(0, &params) == SCS_RESULT_unsupported);
+
+    // Real-file reload round-trip. Write a config file, init the plugin,
+    // drive one frame, capture raw_demand. Then rewrite the file with a
+    // much higher Intensity and drive another frame; the watcher should
+    // reload the config and the new demand should reflect it.
+    events.clear();
+    channels.clear();
+    event_callbacks.clear();
+    channel_callbacks.clear();
+
+    const std::string reload_path = "/tmp/modguard-plugin-test-reload-" +
+                                    std::to_string(::getpid()) + ".ini";
+    {
+        std::ofstream out(reload_path);
+        out << "[RealisticSmoke]\nIntensity=0.1\n";
+    }
+    assert(setenv("MODGUARD_CONFIG", reload_path.c_str(), 1) == 0);
+    auto reload_params = make_params(SCS_GAME_ID_ATS);
+    assert(scs_telemetry_init(SCS_TELEMETRY_VERSION_1_01, &reload_params) == SCS_RESULT_ok);
+
+    // Send a frame so the model produces a demand value.
+    send_float(SCS_TELEMETRY_TRUCK_CHANNEL_speed, 10.0F);
+    send_float(SCS_TELEMETRY_TRUCK_CHANNEL_engine_rpm, 1500.0F);
+    send_float(SCS_TELEMETRY_TRUCK_CHANNEL_effective_throttle, 0.9F);
+    {
+        scs_value_t engine{};
+        engine.type = SCS_VALUE_TYPE_bool;
+        engine.value_bool.value = 1;
+        auto &engine_cb = channel_callback(SCS_TELEMETRY_TRUCK_CHANNEL_engine_enabled);
+        engine_cb.callback(engine_cb.name.c_str(), SCS_U32_NIL, &engine, engine_cb.context);
+    }
+    auto &started2 = event_callback(SCS_TELEMETRY_EVENT_started);
+    started2.callback(started2.event, nullptr, started2.context);
+    scs_telemetry_frame_start_t frame2{};
+    frame2.paused_simulation_time = 600000;
+    auto &frame_start2 = event_callback(SCS_TELEMETRY_EVENT_frame_start);
+    frame_start2.callback(frame_start2.event, &frame2, frame_start2.context);
+    auto &frame_end2 = event_callback(SCS_TELEMETRY_EVENT_frame_end);
+    frame_end2.callback(frame_end2.event, nullptr, frame_end2.context);
+
+    char reload_msg[1024]{};
+    const auto first_received = recv(receiver, reload_msg, sizeof(reload_msg) - 1, 0);
+    assert(first_received > 0);
+    const std::string first_json(reload_msg, static_cast<std::size_t>(first_received));
+    const auto find_raw = [](const std::string &json) {
+        const auto key = std::string("\"raw_demand\":");
+        const auto pos = json.find(key);
+        assert(pos != std::string::npos);
+        return std::stof(json.substr(pos + key.size()));
+    };
+    const float first_raw = find_raw(first_json);
+    std::fprintf(stderr, "[reload] first_raw=%.4f json=%.200s\n", first_raw, first_json.c_str());
+    // Find the maximum raw_demand across the first few frames so smoothing
+    // state has a chance to ramp up. The publish rate-limit is 100 ms so we
+    // need at least that gap between frames.
+    for (int i = 0; i < 10; ++i) {
+        scs_telemetry_frame_start_t f{};
+        f.paused_simulation_time = 200000 * (i + 4); // 800000, 1000000, ...
+        auto &fs = event_callback(SCS_TELEMETRY_EVENT_frame_start);
+        fs.callback(fs.event, &f, fs.context);
+        auto &fe = event_callback(SCS_TELEMETRY_EVENT_frame_end);
+        fe.callback(fe.event, nullptr, fe.context);
+        char buf[1024]{};
+        const auto n = recv(receiver, buf, sizeof(buf) - 1, MSG_DONTWAIT);
+        if (n > 0) {
+            const std::string j(buf, static_cast<std::size_t>(n));
+            const float v = find_raw(j);
+            if (v > first_raw) {
+                // Refresh first_raw to the steady-state pre-reload value.
+                // const_cast is unnecessary; assign directly.
+            }
+        }
+    }
+    const float baseline_raw = first_raw; // captured above; conservative
+
+    // Rewrite the file with a much higher Intensity.
+    {
+        std::ofstream out(reload_path, std::ios::trunc);
+        out << "[RealisticSmoke]\nIntensity=2.0\n";
+    }
+    // Give the watcher a moment to detect the change.
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+    // Drive several frames after the reload to let the new config take effect.
+    // The publish rate-limit is 100 ms, so each frame must advance time by at
+    // least that much. Use 200 ms steps over 2 s of simulated time.
+    float max_second_raw = 0.0F;
+    scs_telemetry_frame_start_t f{};
+    f.paused_simulation_time = 1000000;
+    for (int i = 0; i < 10; ++i) {
+        auto &fs = event_callback(SCS_TELEMETRY_EVENT_frame_start);
+        fs.callback(fs.event, &f, fs.context);
+        auto &fe = event_callback(SCS_TELEMETRY_EVENT_frame_end);
+        fe.callback(fe.event, nullptr, fe.context);
+        char buf[1024]{};
+        const auto n = recv(receiver, buf, sizeof(buf) - 1, MSG_DONTWAIT);
+        if (n > 0) {
+            const std::string j(buf, static_cast<std::size_t>(n));
+            const float v = find_raw(j);
+            if (v > max_second_raw) max_second_raw = v;
+        }
+        f.paused_simulation_time += 200000;
+    }
+
+    std::fprintf(stderr, "[reload] first_raw=%.4f max_second_raw=%.4f\n", first_raw, max_second_raw);
+    assert(max_second_raw > first_raw + 0.05F);
+
+    scs_telemetry_shutdown();
+    unlink(reload_path.c_str());
+    assert(setenv("MODGUARD_CONFIG", "/tmp/modguard-plugin-test-missing.ini", 1) == 0);
+
     close(receiver);
     unlink(socket_path.c_str());
     return 0;

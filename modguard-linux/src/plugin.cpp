@@ -1,4 +1,6 @@
 #include "config.hpp"
+#include "config_runtime.hpp"
+#include "config_watcher.hpp"
 #include "exhaust_model.hpp"
 #include "particle_hook.hpp"
 #include "scs_sdk_minimal.hpp"
@@ -9,6 +11,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 
 #include <sys/socket.h>
@@ -20,6 +23,8 @@ namespace {
 modguard::ExhaustInputs inputs;
 modguard::ExhaustModel model;
 modguard::LoadedConfig loaded_config;
+modguard::ConfigSlot pending_config;
+std::unique_ptr<modguard::ConfigWatcher> config_watcher;
 scs_log_t game_log = nullptr;
 scs_timestamp_t current_time = 0;
 scs_timestamp_t previous_time = 0;
@@ -115,22 +120,32 @@ void publish(const modguard::ExhaustOutput &output)
         return;
     }
     last_publish_time = current_time;
-    char message[384];
+    char message[1024];
     const auto finite = [](float value) { return std::isfinite(value) ? value : 0.0F; };
+    const auto diagnostics = modguard::particle_hook_diagnostics();
     const int length = std::snprintf(
         message, sizeof(message),
         "{\"schema\":\"exhaust_demand_v0\",\"seq\":%llu,\"time_us\":%llu,"
         "\"demand\":%.4f,\"raw_demand\":%.4f,\"session_peak\":%.4f,"
         "\"throttle\":%.4f,\"rpm\":%.1f,\"rpm_limit\":%.1f,"
         "\"speed\":%.3f,\"gear\":%d,\"engine\":%s,\"cargo_loaded\":%s,"
-        "\"cargo_mass\":%.1f,\"hook_active\":%s}",
+        "\"cargo_mass\":%.1f,\"hook_active\":%s,"
+        "\"particle_constructors\":%llu,\"particle_candidates\":%llu,"
+        "\"particle_registered\":%llu,\"smoke_requests\":%llu,"
+        "\"admitted_requests\":%llu,\"suppressed_requests\":%llu}",
         static_cast<unsigned long long>(sequence++),
         static_cast<unsigned long long>(current_time), finite(output.demand), finite(output.raw_demand),
         finite(output.session_peak), finite(inputs.throttle),
         finite(inputs.rpm), finite(inputs.rpm_limit), finite(inputs.speed), inputs.gear,
         inputs.engine_enabled ? "true" : "false",
         inputs.cargo_loaded ? "true" : "false", finite(inputs.cargo_mass),
-        modguard::particle_hook_active() ? "true" : "false");
+        modguard::particle_hook_active() ? "true" : "false",
+        static_cast<unsigned long long>(diagnostics.particle_constructors),
+        static_cast<unsigned long long>(diagnostics.particle_candidates),
+        static_cast<unsigned long long>(diagnostics.particle_registered),
+        static_cast<unsigned long long>(diagnostics.smoke_requests),
+        static_cast<unsigned long long>(diagnostics.admitted_requests),
+        static_cast<unsigned long long>(diagnostics.suppressed_requests));
     if (length <= 0 || static_cast<std::size_t>(length) >= sizeof(message)) {
         return;
     }
@@ -159,8 +174,13 @@ void on_frame_start(scs_event_t, const void *event_info, scs_context_t)
 void on_frame_end(scs_event_t, const void *, scs_context_t)
 {
     if (!paused) {
+        if (modguard::ExhaustConfig *next = pending_config.take()) {
+            model.apply_config(*next);
+            delete next;
+        }
         const auto output = model.update(inputs, delta_seconds);
         modguard::set_particle_demand(output.demand, inputs.engine_enabled);
+        modguard::set_particle_lifetime_multiplier(model.lifetime_multiplier());
         publish(output);
     }
 }
@@ -330,6 +350,7 @@ extern "C" scs_result_t scs_telemetry_init(
     inputs = {};
     loaded_config = modguard::load_config(params.common.game_id);
     model = modguard::ExhaustModel(loaded_config.exhaust);
+    modguard::set_particle_lifetime_multiplier(model.lifetime_multiplier());
     current_time = previous_time = last_publish_time = 0;
     delta_seconds = 0.0F;
     sequence = 0;
@@ -374,6 +395,15 @@ extern "C" scs_result_t scs_telemetry_init(
             "[MODGuard Linux] Particle hook not installed: unsupported ATS executable fingerprint");
     }
     log(SCS_LOG_TYPE_message, "[MODGuard Linux] Exhaust telemetry client initialized");
+
+    // Start the config watcher after all callbacks are registered and the
+    // hook is installed so reloads see the live config from the very next
+    // frame. The watcher polls-then-watches for the ini file, so a missing
+    // file at startup is harmless.
+    config_watcher = std::make_unique<modguard::ConfigWatcher>(
+        loaded_config.path, params.common.log, pending_config);
+    config_watcher->start();
+
     return SCS_RESULT_ok;
 }
 
@@ -382,6 +412,7 @@ extern "C" void scs_telemetry_shutdown()
     modguard::set_particle_demand(0.0F, false);
     unregister_callbacks();
     modguard::remove_particle_hook();
+    config_watcher.reset();
     close_output();
     log(SCS_LOG_TYPE_message, "[MODGuard Linux] Exhaust telemetry client shut down");
     unregister_event = nullptr;

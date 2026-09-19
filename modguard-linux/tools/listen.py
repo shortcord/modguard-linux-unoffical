@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Print MODGuard Linux exhaust-demand datagrams."""
+"""Print MODGuard Linux demand and particle-hook diagnostic datagrams."""
 
 import os
 import socket
 
 
-path = os.environ.get("MODGUARD_EXHAUST_SOCKET", f"/tmp/modguard-exhaust-{os.getuid()}.sock")
+path = os.environ.get(
+    "MODGUARD_EXHAUST_SOCKET", f"/tmp/modguard-exhaust-{os.getuid()}.sock"
+)
 if not os.path.isabs(path):
     raise SystemExit("MODGUARD_EXHAUST_SOCKET must be an absolute path")
 
