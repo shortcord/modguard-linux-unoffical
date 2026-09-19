@@ -95,12 +95,6 @@ Load-specific keys (also under `[RealisticSmoke]`):
 - `LoadSensitivity` (default `1.0`) strength of the heavy-load top-end boost.
 - `GrossWeightReferenceKg` (default `36000`) gross weight at which the load gate saturates.
 - `LoadBaseline` (default `0.15`) smoke fraction for an unloaded, empty truck.
-- `TruckMassKg` (default `8000`) curb weight of the truck.
-- `TrailerMassKg` (default `6000`) weight of the trailer when attached.
-- `LoadCurvePower` (default `1.8`) steepness of the gross-weight smoke curve.
-- `LoadSensitivity` (default `1.0`) strength of the heavy-load top-end boost.
-- `GrossWeightReferenceKg` (default `36000`) gross weight at which the load gate saturates.
-- `LoadBaseline` (default `0.15`) smoke fraction for an unloaded, empty truck.
 - `ThrottleGatePower` (default `1.5`) how strongly demand follows the throttle.
 - `LoadBoostMin` / `LoadBoostMax` (default `0.6` / `2.6`) low and high ends of the heavy-load emission boost.
 
