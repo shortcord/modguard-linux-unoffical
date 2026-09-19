@@ -28,8 +28,21 @@ int main()
                << "ThrottleGatePower=0\n"
                << "RpmLeanFraction=2\n"
                << "RpmLeanPower=0\n"
-               << "LoadBoostMax=-1\n"
-               << "RpmWeight=not-a-number\n";
+                << "LoadBoostMax=-1\n"
+                << "GearWeight=3\n"
+                << "RpmLeanFraction=2\n"
+                << "RpmLeanPower=0\n"
+                << "AccelerationWeight=-4\n"
+                << "ClutchWeight=-1\n"
+                << "CargoWeight=-9\n"
+                << "TractionAccelerationWeight=-2\n"
+                << "LoadEffortWeight=-3\n"
+                << "FreeRevWeight=-0.5\n"
+                << "EventStrength=-9\n"
+                << "SustainedThrottleStrength=-1\n"
+                << "RpmWeight=not-a-number\n"
+               << "LifetimeMultiplier=20\n"
+               << "LifetimeMultiplier=200\n";
     }
 
     const auto loaded = modguard::load_config_file(path);
@@ -47,10 +60,19 @@ int main()
     assert(loaded.exhaust.gross_weight_reference_kg == 1.0F);
     assert(loaded.exhaust.load_baseline == 1.0F);
     assert(loaded.exhaust.throttle_gate_power == 0.1F);
-    assert(loaded.exhaust.rpm_lean_fraction == 1.0F);
-    assert(loaded.exhaust.rpm_lean_power == 0.1F);
     assert(loaded.exhaust.load_boost_max == 0.0F);
+    // Negative weights floor at zero. Unparsable values keep the default.
+    assert(loaded.exhaust.acceleration_weight == 0.0F);
+    assert(loaded.exhaust.clutch_weight == 0.0F);
+    assert(loaded.exhaust.cargo_weight == 0.0F);
+    assert(loaded.exhaust.traction_acceleration_weight == 0.0F);
+    assert(loaded.exhaust.load_effort_weight == 0.0F);
+    assert(loaded.exhaust.free_rev_weight == 0.0F);
+    assert(loaded.exhaust.event_strength == 0.0F);
+    assert(loaded.exhaust.sustained_throttle_strength == 0.0F);
     assert(loaded.exhaust.rpm_weight == 1.0F);
+    assert(loaded.exhaust.launch_weight == 1.0F);
+    assert(loaded.exhaust.lifetime_multiplier == 60.0F);
 
     const auto missing = modguard::load_config_file(path + ".missing");
     assert(!missing.found);

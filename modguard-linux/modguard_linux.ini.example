@@ -29,7 +29,7 @@ ContinuousSmoke=0
 ; --- Global scaling ---
 
 ; Master smoke scale applied after all gates.
-Intensity=0.3
+Intensity=0.5
 
 ; Final multiplier applied to the combined smoke value.
 FinalSmokeMultiplier=0.8
@@ -47,7 +47,7 @@ TruckMassKg=8000
 TrailerMassKg=6000
 
 ; Steepness of the gross-weight smoke curve. Range [0.1, 10].
-LoadCurvePower=1.8
+LoadCurvePower=2.1
 
 ; Gross weight, in kilograms, at which the load gate saturates.
 ; Range [1, 1000000].
@@ -62,16 +62,15 @@ LoadBoostMin=0.6
 ; High end of the heavy-load emission boost. Range [0, 100].
 LoadBoostMax=2.6
 
-; --- Throttle and RPM shaping ---
+; Multiplier applied to the per-layer `time_to_live` field on every admitted
+; smoke spawn. Default 1 leaves the SII values untouched. A value of 20 makes
+; layer 0 linger for ~60s. Range [0, 60]. 0 still passes original lifetimes.
+LifetimeMultiplier=1
+
+; --- Throttle shaping ---
 
 ; How strongly demand follows the throttle. Range [0.1, 5].
 ThrottleGatePower=1.5
-
-; RPM fraction (of the RPM limit) at which smoke reaches zero. Range [0.1, 1].
-RpmLeanFraction=0.6
-
-; Sharpness of the high-RPM lean-out. Range [0.1, 5].
-RpmLeanPower=1.2
 
 ; --- Smoothing and transients ---
 
@@ -98,29 +97,33 @@ LaunchWeight=1.0
 
 ; --- Event and peak ---
 
-; Strength of sustained-throttle events. (Reserved; parsed, not currently
-; active in the Linux pipeline.)
+; Slow follower of the smoothed throttle, in smoke units. When it rises above
+; SustainedThrottleStrength, the added value is follower x EventStrength.
+; The binary role of EventStrength was not recovered. This behavior follows
+; the hypothesis in docs/01-reverse-engineering.md.
 EventStrength=1.0
 
-; Strength of the sustained-throttle contribution. (Reserved; parsed, not
-; currently active in the Linux pipeline.)
+; Threshold, in the same units, that the steady-throttle envelope must pass
+; before a sustained-throttle event adds smoke.
 SustainedThrottleStrength=0.5
 
 ; Per-frame decay fraction of the session peak. Range [0, 1].
 SessionPeakPercent=0.85
 
-; --- Throttle curve and component weights ---
+; --- Weighted additive terms (Windows formula) ---
 ;
-; These keys are parsed and clamped so the schema stays compatible with the
-; analyzed Windows plugin, but the current Linux pipeline does not read them.
-; They are accepted without error and safe to omit.
+; These keys add to the smoke before the load and throttle gates. The terms
+; follow the recovered formula in MODGuard_RE.md section 6.3. The curved
+; throttle term is throttle^exponent x SustainedThrottleStrength / 100, with
+; exponent = 1 + ThrottleCurve/100 and ThrottleCurve = -1 selecting 1.0.
+; LoadEffortWeight multiplies the computed fuel-to-air demand. The binary
+; derivation of that term was not recovered. This mapping is a hypothesis.
+; Each weight has a floor of 0 after sanitizing.
 
 ThrottleCurve=45
-ThrottleWeight=1.0
 RpmWeight=1.0
 SpeedWeight=1.0
 AccelerationWeight=1.0
-GearWeight=1.0
 ClutchWeight=1.0
 CargoWeight=1.0
 TractionAccelerationWeight=1.0

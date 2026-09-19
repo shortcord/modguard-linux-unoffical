@@ -16,11 +16,10 @@ struct ExhaustConfig {
     float load_curve_power = 1.8F;
     float gross_weight_reference_kg = 36000.0F;
     float load_baseline = 0.15F;
-    float throttle_gate_power = 1.5F;
-    float rpm_lean_fraction = 0.6F;
-    float rpm_lean_power = 1.2F;
+    float throttle_gate_power = 1.0F;
     float load_boost_min = 0.6F;
     float load_boost_max = 2.6F;
+    float lifetime_multiplier = 1.0F;
     float attack_smoothness = 0.3F;
     float release_smoothness = 0.3F;
     float event_strength = 1.0F;
@@ -33,7 +32,6 @@ struct ExhaustConfig {
     float rpm_weight = 1.0F;
     float speed_weight = 1.0F;
     float acceleration_weight = 1.0F;
-    float gear_weight = 1.0F;
     float clutch_weight = 1.0F;
     float cargo_weight = 1.0F;
     float launch_weight = 1.0F;
@@ -70,6 +68,9 @@ public:
     explicit ExhaustModel(ExhaustConfig config = {});
     ExhaustOutput update(const ExhaustInputs &inputs, float delta_seconds);
     void reset();
+    void apply_config(const ExhaustConfig &config);
+    const ExhaustConfig &config() const { return config_; }
+    float lifetime_multiplier() const { return config_.lifetime_multiplier; }
 
 private:
     ExhaustConfig config_;
@@ -79,6 +80,9 @@ private:
     float previous_throttle_ = 0.0F;
     float puff_ = 0.0F;
     float shift_transient_ = 0.0F;
+    float launch_envelope_ = 0.0F;
+    float free_rev_envelope_ = 0.0F;
+    float steady_envelope_ = 0.0F;
     float session_peak_ = 0.0F;
     std::int32_t previous_gear_ = 0;
     bool have_previous_gear_ = false;

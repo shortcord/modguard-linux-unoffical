@@ -4,10 +4,12 @@
 #include <cctype>
 #include <cerrno>
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <fstream>
 #include <limits>
 #include <string>
+#include <string_view>
 
 namespace modguard {
 namespace {
@@ -65,44 +67,101 @@ bool parse_bool(const std::string &text, bool &target)
     return false;
 }
 
+enum class FieldType { Bool, Int, Float };
+
+struct Field {
+    std::string_view key;
+    FieldType type;
+    std::size_t offset;
+};
+
+#define MODGUARD_FIELD(name, type) \
+    { #name, FieldType::type, offsetof(ExhaustConfig, name) }
+
+constexpr Field kFields[] = {
+    MODGUARD_FIELD(smoke_hook, Bool),
+    MODGUARD_FIELD(continuous_smoke, Bool),
+    MODGUARD_FIELD(final_smoke_multiplier, Float),
+    MODGUARD_FIELD(intensity, Float),
+    MODGUARD_FIELD(load_sensitivity, Float),
+    MODGUARD_FIELD(truck_mass_kg, Float),
+    MODGUARD_FIELD(trailer_mass_kg, Float),
+    MODGUARD_FIELD(load_curve_power, Float),
+    MODGUARD_FIELD(gross_weight_reference_kg, Float),
+    MODGUARD_FIELD(load_baseline, Float),
+    MODGUARD_FIELD(throttle_gate_power, Float),
+    MODGUARD_FIELD(load_boost_min, Float),
+    MODGUARD_FIELD(load_boost_max, Float),
+    MODGUARD_FIELD(lifetime_multiplier, Float),
+    MODGUARD_FIELD(attack_smoothness, Float),
+    MODGUARD_FIELD(release_smoothness, Float),
+    MODGUARD_FIELD(event_strength, Float),
+    MODGUARD_FIELD(sustained_throttle_strength, Float),
+    MODGUARD_FIELD(throttle_transient_strength, Float),
+    MODGUARD_FIELD(throttle_rise_threshold, Float),
+    MODGUARD_FIELD(throttle_transient_decay, Float),
+    MODGUARD_FIELD(throttle_curve, Int),
+    MODGUARD_FIELD(throttle_weight, Float),
+    MODGUARD_FIELD(rpm_weight, Float),
+    MODGUARD_FIELD(speed_weight, Float),
+    MODGUARD_FIELD(acceleration_weight, Float),
+    MODGUARD_FIELD(clutch_weight, Float),
+    MODGUARD_FIELD(cargo_weight, Float),
+    MODGUARD_FIELD(launch_weight, Float),
+    MODGUARD_FIELD(traction_acceleration_weight, Float),
+    MODGUARD_FIELD(load_effort_weight, Float),
+    MODGUARD_FIELD(free_rev_weight, Float),
+    MODGUARD_FIELD(shift_weight, Float),
+    MODGUARD_FIELD(session_peak_percent, Float),
+};
+
+#undef MODGUARD_FIELD
+
+std::string normalize_key(const std::string &key)
+{
+    // Convert PascalCase ini keys to lowercase snake_case field names.
+    // Example: "SmokeHook" -> "smoke_hook", "TruckMassKg" -> "truck_mass_kg".
+    std::string out;
+    out.reserve(key.size() + 4);
+    for (std::size_t i = 0; i < key.size(); ++i) {
+        const char c = key[i];
+        if (c >= 'A' && c <= 'Z') {
+            if (i > 0) {
+                const char prev = key[i - 1];
+                const bool boundary = !(prev >= 'A' && prev <= 'Z');
+                if (boundary) {
+                    out.push_back('_');
+                }
+            }
+            out.push_back(static_cast<char>(c - 'A' + 'a'));
+        } else {
+            out.push_back(c);
+        }
+    }
+    return out;
+}
+
 void assign(ExhaustConfig &config, const std::string &key, const std::string &value)
 {
-    if (key == "SmokeHook") parse_bool(value, config.smoke_hook);
-    else if (key == "ContinuousSmoke") parse_bool(value, config.continuous_smoke);
-    else if (key == "FinalSmokeMultiplier") parse_float(value, config.final_smoke_multiplier);
-    else if (key == "Intensity") parse_float(value, config.intensity);
-    else if (key == "LoadSensitivity") parse_float(value, config.load_sensitivity);
-    else if (key == "TruckMassKg") parse_float(value, config.truck_mass_kg);
-    else if (key == "TrailerMassKg") parse_float(value, config.trailer_mass_kg);
-    else if (key == "LoadCurvePower") parse_float(value, config.load_curve_power);
-    else if (key == "GrossWeightReferenceKg") parse_float(value, config.gross_weight_reference_kg);
-    else if (key == "LoadBaseline") parse_float(value, config.load_baseline);
-    else if (key == "ThrottleGatePower") parse_float(value, config.throttle_gate_power);
-    else if (key == "RpmLeanFraction") parse_float(value, config.rpm_lean_fraction);
-    else if (key == "RpmLeanPower") parse_float(value, config.rpm_lean_power);
-    else if (key == "LoadBoostMin") parse_float(value, config.load_boost_min);
-    else if (key == "LoadBoostMax") parse_float(value, config.load_boost_max);
-    else if (key == "AttackSmoothness") parse_float(value, config.attack_smoothness);
-    else if (key == "ReleaseSmoothness") parse_float(value, config.release_smoothness);
-    else if (key == "EventStrength") parse_float(value, config.event_strength);
-    else if (key == "SustainedThrottleStrength") parse_float(value, config.sustained_throttle_strength);
-    else if (key == "ThrottleTransientStrength") parse_float(value, config.throttle_transient_strength);
-    else if (key == "ThrottleRiseThreshold") parse_float(value, config.throttle_rise_threshold);
-    else if (key == "ThrottleTransientDecay") parse_float(value, config.throttle_transient_decay);
-    else if (key == "ThrottleCurve") parse_int(value, config.throttle_curve);
-    else if (key == "ThrottleWeight") parse_float(value, config.throttle_weight);
-    else if (key == "RpmWeight") parse_float(value, config.rpm_weight);
-    else if (key == "SpeedWeight") parse_float(value, config.speed_weight);
-    else if (key == "AccelerationWeight") parse_float(value, config.acceleration_weight);
-    else if (key == "GearWeight") parse_float(value, config.gear_weight);
-    else if (key == "ClutchWeight") parse_float(value, config.clutch_weight);
-    else if (key == "CargoWeight") parse_float(value, config.cargo_weight);
-    else if (key == "LaunchWeight") parse_float(value, config.launch_weight);
-    else if (key == "TractionAccelerationWeight") parse_float(value, config.traction_acceleration_weight);
-    else if (key == "LoadEffortWeight") parse_float(value, config.load_effort_weight);
-    else if (key == "FreeRevWeight") parse_float(value, config.free_rev_weight);
-    else if (key == "ShiftWeight") parse_float(value, config.shift_weight);
-    else if (key == "SessionPeakPercent") parse_float(value, config.session_peak_percent);
+    const std::string normalized = normalize_key(key);
+    for (const Field &field : kFields) {
+        if (field.key != normalized) {
+            continue;
+        }
+        void *target = reinterpret_cast<char *>(&config) + field.offset;
+        switch (field.type) {
+        case FieldType::Bool:
+            parse_bool(value, *static_cast<bool *>(target));
+            break;
+        case FieldType::Int:
+            parse_int(value, *static_cast<int *>(target));
+            break;
+        case FieldType::Float:
+            parse_float(value, *static_cast<float *>(target));
+            break;
+        }
+        return;
+    }
 }
 
 void sanitize(ExhaustConfig &config)
@@ -119,10 +178,23 @@ void sanitize(ExhaustConfig &config)
     config.gross_weight_reference_kg = std::clamp(config.gross_weight_reference_kg, 1.0F, 1000000.0F);
     config.load_baseline = std::clamp(config.load_baseline, 0.0F, 1.0F);
     config.throttle_gate_power = std::clamp(config.throttle_gate_power, 0.1F, 5.0F);
-    config.rpm_lean_fraction = std::clamp(config.rpm_lean_fraction, 0.1F, 1.0F);
-    config.rpm_lean_power = std::clamp(config.rpm_lean_power, 0.1F, 5.0F);
     config.load_boost_min = std::clamp(config.load_boost_min, 0.0F, 100.0F);
     config.load_boost_max = std::clamp(config.load_boost_max, 0.0F, 100.0F);
+    config.lifetime_multiplier = std::clamp(config.lifetime_multiplier, 0.0F, 60.0F);
+    // Weighted-sum terms from the Windows formula. Negative weights would make
+    // more throttle or load reduce smoke, so the safe floor is zero.
+    config.throttle_weight = std::max(0.0F, config.throttle_weight);
+    config.rpm_weight = std::max(0.0F, config.rpm_weight);
+    config.speed_weight = std::max(0.0F, config.speed_weight);
+    config.acceleration_weight = std::max(0.0F, config.acceleration_weight);
+    config.clutch_weight = std::max(0.0F, config.clutch_weight);
+    config.cargo_weight = std::max(0.0F, config.cargo_weight);
+    config.launch_weight = std::max(0.0F, config.launch_weight);
+    config.traction_acceleration_weight = std::max(0.0F, config.traction_acceleration_weight);
+    config.load_effort_weight = std::max(0.0F, config.load_effort_weight);
+    config.free_rev_weight = std::max(0.0F, config.free_rev_weight);
+    config.sustained_throttle_strength = std::max(0.0F, config.sustained_throttle_strength);
+    config.event_strength = std::max(0.0F, config.event_strength);
 }
 
 } // namespace
