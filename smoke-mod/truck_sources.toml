@@ -1,0 +1,101 @@
+# Truck source classification for the smoke-mod shared tree.
+#
+# Each entry maps a truck directory under
+# _shared/vehicle/truck/{base_game,workshop}/ (and the matching
+# _shared/vehicle/truck/upgrade/exhaust/{base_game,workshop}/ pool) to its
+# source. The build packaging flattens these back to the SCS-expected
+# /vehicle/truck/<truck>/ path, so the split is a source-tree organization
+# only. See smoke-mod/README.md and docs/mod-smoke-variants.md.
+#
+# status = "confirmed"  -> solid evidence (launch truck, named dependency)
+# status = "hypothesis" -> inferred from roster and naming convention
+#
+# Convention used: SCS base-game truck directories use plain names with no
+# year suffix. Year-suffixed directories denote third-party model-year mods.
+# The SCS modding wiki has no per-truck directory listing, so non-launch
+# entries are hypotheses.
+
+[trucks.intnational_9900i]
+source = "base_game"
+evidence = "International 9900i, official SCS ATS truck."
+status = "hypothesis"
+
+[trucks.intnational_lonestar]
+source = "base_game"
+evidence = "International LoneStar, official SCS ATS truck added in 2020."
+status = "confirmed"
+
+[trucks.intnational_lt]
+source = "base_game"
+evidence = "International LT, official SCS ATS truck."
+status = "confirmed"
+
+[trucks.kenworth_t680]
+source = "base_game"
+evidence = "ATS launch truck (2016), directory kenworth_t680."
+status = "confirmed"
+
+[trucks.kenworth_w900]
+source = "base_game"
+evidence = "ATS launch truck (2016), directory kenworth_w900."
+status = "confirmed"
+
+[trucks.mack_anthem]
+source = "base_game"
+evidence = "Mack Anthem, official SCS ATS truck added in 2020."
+status = "confirmed"
+
+[trucks.mack_pinnacle]
+source = "base_game"
+evidence = "Mack Pinnacle, official SCS ATS truck."
+status = "hypothesis"
+
+[trucks.peterbilt_579]
+source = "base_game"
+evidence = "ATS launch truck (2016), directory peterbilt_579."
+status = "confirmed"
+
+[trucks.volvo_vnl]
+source = "base_game"
+evidence = "Volvo VNL, official SCS ATS truck, plain directory name."
+status = "hypothesis"
+
+[trucks.westernstar_49x]
+source = "base_game"
+evidence = "Western Star 49X, official SCS ATS truck added in 2020."
+status = "confirmed"
+
+[trucks.westernstar_5700xe]
+source = "base_game"
+evidence = "Western Star 5700XE, official SCS ATS truck."
+status = "hypothesis"
+
+[trucks.westernstar_57x]
+source = "base_game"
+evidence = "Western Star 57X, official SCS ATS truck (newer addition)."
+status = "hypothesis"
+
+[trucks.freightliner_cascadia2019]
+source = "workshop"
+evidence = "Year suffix 2019. SCS base-game Cascadia uses freightliner_cascadia (no year). Denotes a third-party model-year mod."
+status = "hypothesis"
+
+[trucks.freightliner_cascadia2024]
+source = "workshop"
+evidence = "Year suffix 2024. SCS base-game Cascadia uses freightliner_cascadia (no year). Denotes a third-party model-year mod."
+status = "hypothesis"
+
+[trucks.kenworth_t680_2022]
+source = "workshop"
+evidence = "Year suffix 2022. SCS base game uses kenworth_t680. Denotes a third-party 2022-facelift T680 mod."
+status = "hypothesis"
+
+[trucks.peterbilt_389]
+source = "workshop"
+evidence = "mod_description.txt names the Pizzster Modding Peterbilt 389 MegaPack as a requirement. The override targets the Workshop mod truck path, which shadows the SCS base-game peterbilt_389."
+status = "confirmed"
+
+[trucks.volvo_vnl2018]
+source = "workshop"
+evidence = "Year suffix 2018. SCS base-game VNL uses volvo_vnl. Denotes a third-party VNL 2018 mod."
+status = "hypothesis"
