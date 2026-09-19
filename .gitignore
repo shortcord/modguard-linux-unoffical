@@ -3,6 +3,17 @@ modguard-linux/build/
 modguard-linux/build-*/
 smoke-mod/build-cmake/
 
+# Local game binaries and symlinks (not distributed)
+ats-current
+ets2-current
+ats-game.log.txt
+ets2-game.log.txt
+ats.[0-9]*
+eurotrucks2.[0-9]*
+
+# Separate sleep-hook prototype
+modguard-sleep-linux/
+
 # Opencode state
 .opencode/
 
