@@ -20,10 +20,12 @@ This repository contains reverse-engineering evidence and a native Linux reimple
 - `docs/mod-smoke-variants.md`: clean smoke-mod presets and packaging.
 - `docs/artefacts/`: generated disassembly, scripts, and raw research notes.
 - `smoke-mod/`: the smoke mod source tree.
-  - `smoke-mod/_shared/`: the extracted `PM_389_Smoke.zip` companion-mod tree. This is the shared base the variants overlay. It contains proprietary mod content kept verbatim; do not modify it.
-  - `smoke-mod/soft-haze/` and `smoke-mod/subtle/`: clean replacement particle definitions and sprite texture for each preset. These are the only clean source overlays.
+  - `smoke-mod/README.md`: operator-facing build and install instructions for the smoke-mod presets.
+  - `smoke-mod/_shared/`: the extracted `PM_389_Smoke.zip` companion-mod tree. The `vehicle/truck/` subtree is reorganized by source into `base_game/` and `workshop/` subdirectories. The packaging script flattens these back to the SCS-expected `/vehicle/truck/<truck>/` layout in the shipped archive. The original `PM_389_Smoke.zip` in `reverse-enginnering/` is the verbatim evidence copy.
+  - `smoke-mod/truck_sources.toml`: sidecar index that maps each truck directory to `base_game` or `workshop`, with evidence and status.
+  - `smoke-mod/soft-haze/`, `smoke-mod/subtle/`, and `smoke-mod/dark-long/`: clean replacement particle definitions and sprite texture for each preset. These are the clean source overlays. The overlay system is mesh-capable: a preset can also replace `.pmg`/`.pmd`/`.pmc` files at matching relative paths, subject to the mesh-pair rule.
   - `smoke-mod/build-cmake/`: CMake build tree that holds the packaged variant archives (build output, not committed).
-- `smoke-mod/CMakeLists.txt`: self-contained CMake packaging system. It overlays a `smoke-mod/<variant>/` preset onto the `smoke-mod/_shared/` tree. Build it with `cmake -S smoke-mod -B smoke-mod/build-cmake` and `cmake --build smoke-mod/build-cmake --target smoke_mod_variants`.
+- `smoke-mod/CMakeLists.txt`: self-contained CMake packaging system. It overlays a `smoke-mod/<variant>/` preset onto the `smoke-mod/_shared/` tree. The overlay is mesh-capable and enforces a `.pmg`+`.pmd` pair rule. Build it with `cmake -S smoke-mod -B smoke-mod/build-cmake` and `cmake --build smoke-mod/build-cmake --target smoke_mod_variants`.
 - `modguard-linux/`: C++17 implementation of the native Linux SCS Telemetry plugin.
 - `modguard-linux/include/`: the minimal vendored SCS Telemetry SDK ABI.
 - `modguard-linux/src/`: configuration, exhaust model, plugin entry points, and particle hook.
@@ -94,7 +96,7 @@ The particle hook writes to executable game memory. Treat every change in `parti
 - Add synthetic signature tests for each supported memory layout.
 - If a hook profile changes, document the game executable and evidence.
 
-The current source contains profiles for ATS 1.55, ATS 1.60, and ETS2 1.55. A profile is supported only when its version and machine-code checks pass.
+The current source contains profiles for ATS 1.55, ATS 1.60, ETS2 1.55, and ETS2 1.60.1.7s. A profile is supported only when its version and executable checks pass.
 
 ## Configuration And Telemetry
 

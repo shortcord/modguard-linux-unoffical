@@ -168,7 +168,10 @@ If the path is too long for `sun_path`, output is disabled with a warning. The s
  "demand":0.83,"raw_demand":1.25,"session_peak":1.25,
  "throttle":0.70,"rpm":1450.0,"rpm_limit":2100.0,
  "speed":18.4,"gear":8,"engine":true,"cargo_loaded":true,
- "cargo_mass":18500.0,"hook_active":true}
+ "cargo_mass":18500.0,"hook_active":true,
+ "particle_constructors":12,"particle_candidates":720,
+ "particle_registered":640,"smoke_requests":600,
+ "admitted_requests":531,"suppressed_requests":69}
 ```
 
 Field notes:
@@ -178,8 +181,18 @@ Field notes:
 - `demand` is clamped to `[0,1]`. `raw_demand` is the unclamped model output kept for diagnostics.
 - All floats pass through `std::isfinite` so the JSON never contains `nan` or `inf`.
 - `hook_active` reflects `modguard::particle_hook_active()`.
+- `particle_constructors` counts calls to the hooked generator constructor.
+- `particle_candidates` counts calls that have the profile node size and a valid candidate pointer.
+- `particle_registered` counts candidates that match the constructor registry.
+- `smoke_requests` counts registered candidates that match a smoke layer signature.
+- `admitted_requests` counts smoke requests that reach the original game function.
+- `suppressed_requests` counts smoke requests that the demand gate rejects.
 
-The datagram is sent with `MSG_DONTWAIT`. Loss is expected and never affects particle control or the game process. If the JSON exceeds the 384-byte message buffer, it is dropped silently.
+The particle counters are cumulative for the current hook installation. The hook callbacks update them with relaxed atomic operations.
+
+The constructor registry contains all particle generators. Thus, a nonzero `particle_registered` value does not prove that an exhaust generator registered. The counter sequence narrows the failed stage, but it does not identify a generator by itself.
+
+The datagram is sent with `MSG_DONTWAIT`. Loss is expected and never affects particle control or the game process. If the JSON exceeds the 1024-byte message buffer, it is dropped silently.
 
 ### 5.3 Listener
 
@@ -238,9 +251,9 @@ Tests are standalone executables that use `assert` and are registered with CTest
 
 | Test | Source | Covers |
 | --- | --- | --- |
-| `exhaust_model_test` | `tests/exhaust_model_test.cpp` | Engine-off zero, smoothing, shift transient, NaN inputs, launch, coast decay, `SmokeHook=0`, continuous smoke, heavy-vs-light load, low-vs-high RPM lean-out |
+| `exhaust_model_test` | `tests/exhaust_model_test.cpp` | Engine-off zero, smoothing, shift transient, NaN inputs, launch, coast decay, `SmokeHook=0`, continuous smoke, heavy-vs-light load, weighted terms, free-rev gate |
 | `config_test` | `tests/config_test.cpp` | Section filtering, bool variants, inline comments, sanitize clamping, invalid values, missing file |
-| `particle_signature_test` | `tests/particle_signature_test.cpp` | ETS2 1.55, ATS 1.55, and ATS 1.60 layer classification, vtable mismatches, non-smoke layers |
+| `particle_signature_test` | `tests/particle_signature_test.cpp` | ETS2 1.55/1.60 and ATS 1.55/1.60/1.61 classification, vtable mismatches, non-smoke layers, profile selection, build-ID mismatches |
 | `particle_admission_test` | `tests/particle_admission_test.cpp` | Cross-sampler determinism, per-layer independence, per-call independence |
 | `plugin_test` | `tests/plugin_test.cpp` | Full init/shutdown cycle, event and channel registration counts, configuration callback, datagram JSON shape, NaN exclusion, unsupported game/version rejection |
 

@@ -54,9 +54,10 @@ This struct is returned by `ExhaustModel::update` (`exhaust_model.hpp:60-66`):
 ### 1.4 `ExhaustModel`
 
 This is a stateful model. It has `update(inputs, delta_seconds)` and `reset()`
-(`exhaust_model.hpp:68-85`). The private state includes `throttle_smoothed_`,
+(`exhaust_model.hpp:68-89`). The private state includes `throttle_smoothed_`,
 `rpm_smoothed_`, `boost_` (turbo lag), `previous_throttle_`, `puff_`
-(transient over-fuel), `shift_transient_`, `session_peak_`,
+(transient over-fuel), `shift_transient_`, `launch_envelope_`,
+`free_rev_envelope_`, `steady_envelope_`, `session_peak_`,
 `previous_gear_`, and `have_previous_gear_`.
 
 ---
@@ -81,7 +82,6 @@ resets the state.
 - `rpm_limit` falls back to `2500.0F` if it is invalid or `<= 1.0F`.
 - RPM is low-pass smoothed with `tau = 0.3F`. This damps telemetry jitter.
 - `rpm_norm = clamp01(rpm_smoothed / rpm_limit)`.
-- The idle fraction is fixed at `0.10F`.
 
 ### 2.3 Boost lag (turbo dynamics)
 
@@ -89,12 +89,6 @@ resets the state.
   pressure that rises with throttle and RPM.
 - `boost_` is a first-order lag with `tau_boost = 1.2F`. This makes the boost
   lag the throttle.
-
-### 2.4 RPM factor
-
-Below the idle fraction, `rpm_factor = 1.0F`. Above idle, it lerps from `1.6F`
-(lugging) down to `0.7F` (high RPM). Lugging the engine worsens the smoke.
-High RPM reduces the smoke (`exhaust_model.cpp:75-80`).
 
 ### 2.5 Effective load
 
@@ -107,7 +101,6 @@ High RPM reduces the smoke (`exhaust_model.cpp:75-80`).
 - Below 50% load, the smoke is near zero: `smoke_load = 0.02 * load`.
 - Above 50% load, the smoke rises sharply:
   `smoke_load = 0.01 + (load - 0.5)^1.8 * 0.9`.
-- The result is multiplied by `rpm_factor`.
 
 ### 2.7 Transient puff (turbo-lag over-fueling)
 
@@ -116,10 +109,17 @@ High RPM reduces the smoke (`exhaust_model.cpp:75-80`).
 - `puff_ = max(puff_target, decay(puff_, dt, 1.5))` holds the puff at its peak.
   It lets the puff decay with a 1.5 s time constant.
 
-### 2.8 Gear-shift puff
+### 2.8 Envelopes and gear-shift puff
 
-When `gear` changes, `shift_transient_` is set to `1.0F`. Otherwise it decays
-with `tau = 0.3F` (`exhaust_model.cpp:104-110`).
+- When `gear` changes, `shift_transient_` is set to `1.0F`. Otherwise it decays
+  with `tau = 0.3F` (`exhaust_model.cpp:104-110`).
+- The launch envelope rises to `1.0F` when speed is below `1.0F` and throttle
+  is above `0.5F`. It decays with `tau = 1.5F`. A floor cut removes the tail.
+  This follows the launch event in the Windows formula.
+- The free-rev envelope rises while the engine runs, the throttle is below
+  `0.05F`, and the gear is neutral. It decays with `tau = 0.5F`.
+- The steady envelope follows the smoothed throttle with a rise time constant
+  of `8 s`. It releases at once. It drives the sustained-throttle event.
 
 ### 2.9 Combination
 
@@ -127,10 +127,38 @@ with `tau = 0.3F` (`exhaust_model.cpp:104-110`).
 smoke  = smoke_load
 smoke += puff_ * 0.7 * throttle_transient_strength
 smoke += shift_transient_ * 0.5 * shift_weight
-if speed < 2 and throttle > 0.5 and gear >= 1:
-    smoke += 0.15 * throttle * launch_weight
+smoke += launch_envelope * launch_weight
 ```
-(`exhaust_model.cpp:115-120`)
+
+Then the weighted additive terms from the Windows formula enter (section
+6.3 of `../reverse-enginnering/MODGuard_RE.md`):
+
+```
+exponent = 1 + ThrottleCurve / 100  (-1 selects 1.0)
+smoke += throttle_smoothed ^ exponent * SustainedThrottleStrength / 100
+smoke += rpm_norm * rpm_weight
+smoke += clamp(speed / 30, 0, 1) * speed_weight
+smoke += accel_norm * (acceleration_weight + traction_acceleration_weight)
+smoke += clutch_norm * clutch_weight
+smoke += (cargo_mass / 30000 if cargo_loaded else 0) * cargo_weight
+smoke += clamp(load, 0, 1) * load_effort_weight
+smoke += free_rev_envelope * free_rev_weight
+```
+
+`accel_norm` is the clamped acceleration magnitude divided by `9.81`.
+`free_rev_envelope` rises while the engine runs, the throttle is below `0.05`,
+and the gear is neutral. The sustained-throttle event adds
+`steady_envelope * event_strength` when `steady_envelope` passes
+`sustained_throttle_strength`. The steady envelope rises with a time constant
+of `8 s` and releases at once.
+
+> **Hypotheses.** The binary derivation of `load_effort` was not recovered.
+> The Linux model maps it to the computed fuel-to-air demand. The role of
+> `EventStrength` was not recovered. The Linux model follows the
+> sustained-throttle event in `docs/01-reverse-engineering.md`. Both terms are
+> labeled as hypotheses.
+
+(`exhaust_model.cpp:113-171`)
 
 ### 2.10 Gross-weight load gate
 
@@ -146,25 +174,24 @@ telemetry (`exhaust_model.cpp:122-134`):
 A light, unloaded truck stays near `load_baseline`. A heavy, loaded combination
 approaches the full gate.
 
-### 2.11 Throttle and RPM gates
+### 2.11 Throttle gate
 
-Diesel smoke comes from over-fueling at low RPM under high throttle
-(`exhaust_model.cpp:136-145`):
+Diesel smoke comes from over-fueling under heavy throttle with little boost
+available (`exhaust_model.cpp:187-189`):
 
 - `throttle_gate = throttle_smoothed ^ throttle_gate_power`.
-- `rpm_gate = (1 - clamp(rpm_norm / rpm_lean_fraction, 0, 1)) ^ rpm_lean_power`.
 
-The smoke leans out sharply as RPM rises through `rpm_lean_fraction` of the
-limit.
+The weighted terms enter before this gate. At zero throttle the gate
+multiplies the smoke to zero. A free-revving idle therefore stays clean.
 
 ### 2.12 Final scaling
 
 ```
-smoke *= load_gate * throttle_gate * rpm_gate
+smoke *= load_gate * throttle_gate
 smoke *= intensity * final_smoke_multiplier
 smoke *= load_boost * load_sensitivity + (1 - load_sensitivity)
 ```
-(`exhaust_model.cpp:145-153`)
+(`exhaust_model.cpp:198-206`)
 
 `load_boost` lerps from `load_boost_min` to `load_boost_max` across the load
 gate. A loaded, working truck can reach far more smoke than a light truck.
@@ -193,8 +220,9 @@ diagnostics.
 
 ## 3. Reset behavior
 
-`reset()` (`exhaust_model.cpp:31`) zeroes all smoothing, boost, puff,
-shift-transient, session-peak, and previous-gear state. It is called on:
+`reset()` (`exhaust_model.cpp:37`) zeroes all smoothing, boost, puff,
+shift-transient, envelope, session-peak, and previous-gear state. It is
+called on:
 
 - Engine off (every `update` with `engine_enabled == false`).
 - Pause (`on_pause` in `plugin.cpp`).
@@ -239,13 +267,11 @@ invalid values use the safe defaults shown. The ranges are enforced by
 | `LoadBoostMin` | float | `0.6` | `[0, 100]` | Low end of the heavy-load emission boost. |
 | `LoadBoostMax` | float | `2.6` | `[0, 100]` | High end of the heavy-load emission boost. |
 
-### 4.4 Throttle and RPM shaping
+### 4.4 Throttle shaping
 
 | Key | Type | Default | Range | Meaning |
 | --- | --- | --- | --- | --- |
 | `ThrottleGatePower` | float | `1.5` | `[0.1, 5]` | How strongly demand follows the throttle. |
-| `RpmLeanFraction` | float | `0.6` | `[0.1, 1]` | RPM fraction at which smoke reaches zero. |
-| `RpmLeanPower` | float | `1.2` | `[0.1, 5]` | Sharpness of the high-RPM lean-out. |
 
 ### 4.5 Smoothing and transients
 
@@ -257,37 +283,41 @@ invalid values use the safe defaults shown. The ranges are enforced by
 | `ThrottleRiseThreshold` | float | `0.05` | `[0, 1]` | (Reserved. Parsed and clamped. Not currently used in the pipeline.) |
 | `ThrottleTransientDecay` | float | `0.1` | `>= 0` | (Reserved. Parsed and clamped. Not currently used in the pipeline.) |
 | `ShiftWeight` | float | `1.0` | any finite | Weight of the gear-shift puff. |
-| `LaunchWeight` | float | `1.0` | any finite | Weight of the stationary-launch puff. |
+| `LaunchWeight` | float | `1.0` | `>= 0` | Weight of the launch envelope. It fires when speed is below `1` m/s and throttle is above `0.5`. |
 
 ### 4.6 Event and peak
 
 | Key | Type | Default | Range | Meaning |
 | --- | --- | --- | --- | --- |
-| `EventStrength` | float | `1.0` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
-| `SustainedThrottleStrength` | float | `0.5` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
+| `EventStrength` | float | `1.0` | `>= 0` | Weight of the sustained-throttle event. (Hypothesis. See below.) |
+| `SustainedThrottleStrength` | float | `0.5` | `>= 0` | Threshold that the steady envelope must pass. It also scales the curved-throttle term. |
 | `SessionPeakPercent` | float | `0.85` | `[0, 1]` | Per-frame decay fraction of the session peak. |
 
 ### 4.7 Throttle curve and component weights
 
 | Key | Type | Default | Range | Meaning |
 | --- | --- | --- | --- | --- |
-| `ThrottleCurve` | int | `45` | `[-1, 100]` | Parsed and clamped. (The pipeline uses `throttle_gate_power` for throttle shaping. This key is retained for schema compatibility with `MODGuard_RE.md`.) |
+| `ThrottleCurve` | int | `45` | `[-1, 100]` | Exponent `1 + value/100` of the curved-throttle term. `-1` selects `1.0`. |
 | `ThrottleWeight` | float | `1.0` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
-| `RpmWeight` | float | `1.0` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
-| `SpeedWeight` | float | `1.0` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
-| `AccelerationWeight` | float | `1.0` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
-| `GearWeight` | float | `1.0` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
-| `ClutchWeight` | float | `1.0` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
-| `CargoWeight` | float | `1.0` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
-| `TractionAccelerationWeight` | float | `1.0` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
-| `LoadEffortWeight` | float | `1.0` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
-| `FreeRevWeight` | float | `1.0` | any finite | (Reserved. Parsed. Not currently used in the pipeline.) |
+| `RpmWeight` | float | `1.0` | `>= 0` | Weight of `rpm_norm`. |
+| `SpeedWeight` | float | `1.0` | `>= 0` | Weight of `speed / 30 m/s`, clamped to `[0,1]`. |
+| `AccelerationWeight` | float | `1.0` | `>= 0` | Weight of the acceleration fraction. |
+| `ClutchWeight` | float | `1.0` | `>= 0` | Weight of the clutch fraction. |
+| `CargoWeight` | float | `1.0` | `>= 0` | Weight of `cargo.mass / 30000` while cargo is loaded. |
+| `TractionAccelerationWeight` | float | `1.0` | `>= 0` | Extra weight on the acceleration fraction. |
+| `LoadEffortWeight` | float | `1.0` | `>= 0` | Weight of the computed fuel-to-air demand. (Hypothesis. See below.) |
+| `FreeRevWeight` | float | `1.0` | `>= 0` | Weight of the free-rev envelope. |
 
-> **Reserved keys.** Several keys in section 4.6 and 4.7 are parsed and
-> sanitized. This keeps the INI schema compatible with `MODGuard_RE.md`. The
-> current Linux pipeline does not read them. They are accepted without error.
-> They are clamped to their safe ranges. They must not be presented as active
-> behavior in user-facing documentation.
+> **Removed keys.** `RpmLeanFraction`, `RpmLeanPower`, and `GearWeight` are
+> no longer part of the schema. The loader ignores them. Old files that set
+> them still load.
+
+> **Hypothesis keys.** The binary derivation of `load_effort` was not
+> recovered. The Linux model multiplies `LoadEffortWeight` with its computed
+> fuel-to-air demand. The role of `EventStrength` was not recovered. The Linux
+> model uses it as the weight of a sustained-throttle event. Both labels come
+> from `docs/01-reverse-engineering.md`. Do not present them as confirmed
+> binary behavior.
 
 ---
 
@@ -309,7 +339,15 @@ fully commented template with every key and its default is at
 ## 6. Relationship to the Windows formula
 
 The Windows plugin (see `../reverse-enginnering/MODGuard_RE.md` section 6) computes a weighted sum
-of per-input terms. It then assigns one of three particle-size buckets
+of per-input terms. The Linux model now applies the recovered weighted terms
+from section 6.3. The curved-throttle term, the component weights, and the
+free-rev envelope follow the recovered formula. The launch envelope follows
+the recovered launch event. The model adds these terms before its own gates.
+
+Two terms are labeled as hypotheses: `load_effort` and `EventStrength`. Their
+roles in the binary were not recovered. See section 4.7.
+
+The Windows plugin then assigns one of three particle-size buckets
 (`100`, `2500`, `10000`). The Linux model does **not** reproduce the bucket
 assignment. Those values are the original plugin's RPM-limit minimum, default,
 and maximum. They are not a smoke-output scale.

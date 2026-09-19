@@ -10,12 +10,10 @@ The repository also contains the analyzed Windows binary and the companion mod. 
 
 | Game | Supported versions |
 | --- | --- |
-| American Truck Simulator | 1.55, 1.60 |
-| Euro Truck Simulator 2 | 1.55 |
+| American Truck Simulator | 1.55, 1.60.1.8s, 1.61.1.4s |
+| Euro Truck Simulator 2 | 1.55, 1.60.1.7s |
 
 > **Why the version matters.** The plugin writes a jump instruction into the game code in memory. The location and the exact bytes differ between game versions. The plugin checks the game identity and the bytes at the target address before it changes anything. If the game version or the bytes do not match, the plugin does nothing and the smoke effect stays in its default state. A new game version can move or change the target code. When that happens, the plugin cannot attach until a new profile is added for that version.
-
-> **Note on ETS support.** I am waiting on the Coaches DLC before I upgrade my install, until then ETS support will be 1.55.x (as I don't really want to spend the time upgrading my mods just yet). Pull requests for adding 1.60.x are welcome.
 
 ## Reasoning
 
@@ -52,10 +50,10 @@ The Linux implementation gives these functions:
 - Native Linux SCS Telemetry SDK integration for ATS and ETS2.
 - A configurable exhaust-demand model. The model uses throttle, RPM, speed, gear, clutch, cargo, and acceleration.
 - An in-process particle hook with version and machine-code checks.
-- Hook profiles for ATS 1.55, ATS 1.60, and ETS2 1.55.
+- Active hook profiles for ATS 1.60.1.8s, ATS 1.61.1.4s, and ETS2 1.60.1.7s. The 1.55 allocator profiles are disabled. Every active profile is pinned to an exact ELF build ID.
 - Synchronized multi-pipe emission. Matching smoke layers on different pipes get identical admission decisions.
 - Non-blocking JSON diagnostics through a Unix datagram socket.
-- Two clean smoke-mod presets. The presets are soft haze and subtle modern exhaust. A CMake packaging system builds them.
+- Three clean smoke-mod presets. The presets are soft haze, subtle modern exhaust, and dark long smoke. A CMake packaging system builds them.
 - Unit tests for the model, the configuration parser, the plugin ABI, the particle signatures, and the layer admission.
 
 The plugin works only with native Linux game executables. It cannot load into a Windows game process under Proton.
@@ -78,8 +76,10 @@ Particle-hook support is fail closed. If a game version or machine-code signatur
 | `docs/artefacts/` | Scripts, disassembly output, and raw research notes. |
 | `reverse-enginnering/MODGuard.dll` | Analyzed proprietary Windows plugin. |
 | `reverse-enginnering/PM_389_Smoke.zip` | Proprietary companion smoke mod used for analysis. |
-| `smoke-mod/_shared/` | Extracted `PM_389_Smoke.zip` tree. Shared base the variants overlay. Kept verbatim. |
-| `smoke-mod/soft-haze/`, `smoke-mod/subtle/` | Clean replacement particle definitions and sprite texture for each preset. |
+| `smoke-mod/_shared/` | Extracted `PM_389_Smoke.zip` tree. Shared base the variants overlay. The `vehicle/truck/` subtree is reorganized by source into `base_game/` and `workshop/` subdirectories. The packaging script flattens these back to the SCS-expected flat layout. |
+| `smoke-mod/truck_sources.toml` | Sidecar index that maps each truck directory to `base_game` or `workshop`, with evidence and status. |
+| `smoke-mod/soft-haze/`, `smoke-mod/subtle/`, `smoke-mod/dark-long/` | Clean replacement particle definitions and sprite texture for each preset. The overlay is mesh-capable. |
+| `smoke-mod/README.md` | Operator-facing build and install instructions for the smoke-mod presets. |
 | `smoke-mod/CMakeLists.txt` | Self-contained CMake packaging system for the smoke-mod variants. |
 | `smoke-mod/build-cmake/` | CMake build tree for the packaged smoke-mod variant archives. This is build output, not committed. |
 | `modguard-linux/` | Native Linux plugin source, tests, and tools. |
@@ -109,6 +109,14 @@ ctest --test-dir modguard-linux/build --output-on-failure
 
 The build creates `modguard-linux/build/modguard_linux.so`.
 
+The build also creates `modguard-linux/build/modguard_check`. Give this utility a native Linux game binary to report its support status:
+
+```bash
+modguard-linux/build/modguard_check "/path/to/game"
+```
+
+The utility uses the same ELF build-ID and machine-code checks as the plugin.
+
 ## Install
 
 If the game installation does not contain the plugin directory, create it. Then copy `modguard_linux.so` to the applicable directory:
@@ -124,12 +132,17 @@ After startup, read the game log. The plugin reports whether the telemetry clien
 
 ## Smoke Mod Variants
 
-The companion mod `PM_389_Smoke.zip` is read-only proprietary evidence. It is never modified. Its extracted tree lives under `smoke-mod/_shared/` and is kept verbatim. Two clean visual presets are provided as source under `smoke-mod/`. They are repackaged into playable mod archives:
+The companion mod `PM_389_Smoke.zip` is read-only proprietary evidence. Its extracted tree lives under `smoke-mod/_shared/`. The `vehicle/truck/` subtree is reorganized by source into `base_game/` and `workshop/` subdirectories. The packaging script flattens these back to the SCS-expected flat `/vehicle/truck/<truck>/` layout in the shipped archive. The original `PM_389_Smoke.zip` in `reverse-enginnering/` is the verbatim evidence copy.
+
+Three clean visual presets are provided as source under `smoke-mod/`. They are repackaged into playable mod archives:
 
 - **soft-haze**: a soft natural haze with feathered sprite edges, wider lateral drift, gentle fade-in, and lowered per-sprite opacity. Overlapping sprites form the plume.
 - **subtle**: a lighter, modern exhaust with reduced opacity, gentler growth, and less visual persistence. It becomes visible mainly under load.
+- **dark-long**: a heavy, dark smoke that lingers in the air. For a 1-minute layer-0 lifetime, set `LifetimeMultiplier=20` in the plugin configuration.
 
-Both presets keep the documented generator layer signatures. These are count, size, and lifetime. The Linux particle hook still recognizes them. The presets also replace the smoke sprite with a feathered, edge-free soft cloud texture. This texture avoids obvious billboard boundaries. The texture keeps the same DX10 `BC3_UNORM_SRGB` format and the original `model/particle/pipe.dds` path.
+All three presets keep the documented generator layer signatures. These are count, size, and lifetime. The Linux particle hook still recognizes them. The presets also replace the smoke sprite with a feathered, edge-free soft cloud texture. This texture avoids obvious billboard boundaries. The texture keeps the same DX10 `BC3_UNORM_SRGB` format and the original `model/particle/pipe.dds` path.
+
+The overlay system is mesh-capable. A preset can also replace `.pmg`/`.pmd`/`.pmc` files at matching relative paths. The build enforces a `.pmg`+`.pmd` pair rule and fails closed on a mismatch.
 
 Build the packaged archives:
 
@@ -138,7 +151,9 @@ cmake -S smoke-mod -B smoke-mod/build-cmake
 cmake --build smoke-mod/build-cmake --target smoke_mod_variants
 ```
 
-This copies the shared tree, overlays the variant particle definition and sprite, and writes two archives. The archives are `smoke-mod/build-cmake/PM_389_Smoke_soft-haze.zip` and `smoke-mod/build-cmake/PM_389_Smoke_subtle.zip`. Enable one of these in the game mod manager.
+This copies the shared tree, flattens the source split, removes `.bak` files, overlays the variant files, and writes three archives. The archives are `smoke-mod/build-cmake/PM_389_Smoke_<variant>.zip`. Enable one of these in the game mod manager.
+
+For operator-facing build and install instructions, read [`smoke-mod/README.md`](smoke-mod/README.md). For the implementation reference, read [`docs/mod-smoke-variants.md`](docs/mod-smoke-variants.md).
 
 Do the final visual tuning in game. The repository cannot reproduce the SCS particle renderer.
 

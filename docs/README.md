@@ -6,6 +6,8 @@ This documentation covers the reverse engineering of **MODGuard.dll**. This is a
 
 The reverse-engineering documents (01-05) record the analyzed Windows binary. The implementation documents (`linux-*`, `mod-*`) describe the current Linux plugin and clean smoke-mod presets in `modguard-linux/` and `smoke-mod/`.
 
+The maintainer guide [`linux-hook-maintainer-guide.md`](linux-hook-maintainer-guide.md) describes the shared profile table, the offline binary detector, and the safe process for adding a hook profile.
+
 ## Files Analysed
 
 | File | Size | SHA-256 (truncated) | Purpose |
@@ -70,13 +72,14 @@ separate from the reverse-engineering research above.
 
 7. **[`linux-exhaust-model.md`](linux-exhaust-model.md)** — `exhaust_demand_v0` model and configuration
    - `ExhaustInputs` / `ExhaustConfig` / `ExhaustOutput` structs
-   - Throttle smoothing, boost lag, load gate, RPM lean-out, transients
+   - Throttle smoothing, boost lag, load gate, weighted Windows terms, transients
    - Full `[RealisticSmoke]` key table with defaults and sanitize ranges
    - Relationship to the Windows bucket formula
 
 8. **[`linux-particle-hook.md`](linux-particle-hook.md)** — In-process particle hook
-   - Hook profiles for ATS 1.55, ATS 1.60, and ETS2 1.55
-   - Allocator-trampoline and spawn-function-entry models
+   - Active hook profiles for ATS 1.60, ATS 1.61.1.4s, and ETS2 1.60.1.7s; the 1.55
+     allocator profiles are disabled because NULL suppression crashes the game
+   - Allocator-trampoline, allocator-entry, and spawn-function-entry models
    - Trampoline construction, generator registry, layer classifiers
    - Synchronized `LayerSampler` admission and the 24-bit threshold
    - Install/shutdown flow and safety constraints
@@ -86,6 +89,14 @@ separate from the reverse-engineering research above.
    - `smoke-mod/soft-haze` and `smoke-mod/subtle` presets
    - `smoke-mod/CMakeLists.txt` packaging (opt-in target)
    - Relationship to the shared `smoke-mod/_shared/` companion-mod tree
+
+10. **[`mod-emitter-attachment.md`](mod-emitter-attachment.md)** — Mod → plugin emitter attachment
+    - On-disk contract under `smoke-mod/_shared/` (PM_389_Smoke)
+    - Runtime wiring from `.pmg` hookup string to live particle generators
+    - Layer signatures and per-game classifier contracts (offsets, vtable bases)
+    - Generator registry and admission control loop
+    - Authoring rules for new variants and new game versions
+    - End-user workflow for adding a mesh locator with SCS Blender Tools
 
 ### 🗂️ Raw Artefacts
 
