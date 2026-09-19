@@ -1,24 +1,18 @@
 #ifndef MODGUARD_PARTICLE_HOOK_HPP
 #define MODGUARD_PARTICLE_HOOK_HPP
 
+#include <cstddef>
 #include <cstdint>
 
 namespace modguard {
 
-struct ParticleHookStats {
+struct ParticleHookDiagnostics {
+    std::uint64_t particle_constructors = 0;
+    std::uint64_t particle_candidates = 0;
+    std::uint64_t particle_registered = 0;
     std::uint64_t smoke_requests = 0;
     std::uint64_t admitted_requests = 0;
-};
-
-// Diagnostic counters surfaced for logging / debugging.
-struct ParticleHookDiagnostics {
-    std::uint64_t allocator_calls = 0;       // total hook invocations
-    std::uint64_t registered_generators = 0;  // successful constructor registrations
-    std::uint64_t registered_container_hits = 0;  // containers matching registration
-    std::uint64_t smoke_container_hits = 0;  // containers matching signature
-    std::uint64_t eligible_admits = 0;       // allocations admitted while eligible
-    std::uint64_t eligible_suppressions = 0; // allocations suppressed while eligible
-    std::uint64_t ineligible_passthroughs = 0;
+    std::uint64_t suppressed_requests = 0;
 };
 
 bool install_particle_hook(const char *game_id, std::uint32_t game_version);
@@ -26,6 +20,28 @@ void remove_particle_hook();
 void set_particle_demand(float demand, bool eligible);
 void particle_hook_frame_start();
 bool particle_hook_active();
+// Returns cumulative counters for the current hook installation.
+ParticleHookDiagnostics particle_hook_diagnostics();
+void set_particle_lifetime_multiplier(float multiplier);
+
+// Writes `cached_original * multiplier` to the lifetime field at the given
+// offset in `generator`. Idempotent: the cached original ensures successive
+// calls do not compound on the value written by the previous call. Exposed
+// for unit testing the lifetime-override contract against synthetic layouts.
+void apply_lifetime_to_buffer(void *generator, std::size_t lifetime_offset,
+                              float cached_original, float multiplier);
+
+// Sets the page protection of `address`. `protection` uses the platform
+// PROT_* values. Returns true when the operation succeeds.
+using CodeProtector = bool (*)(void *address, int protection);
+
+// Checks `target` against `expected`, writes `replacement`, and restores
+// read-execute protection. If protection restore fails, it reverts the bytes
+// and returns false. A false return always means `target` is unchanged and the
+// caller must treat the patch as not installed. Exposed for unit testing.
+bool apply_code_patch(std::uint8_t *target, const std::uint8_t *expected,
+                      const std::uint8_t *replacement, std::size_t size,
+                      CodeProtector protector);
 
 } // namespace modguard
 
