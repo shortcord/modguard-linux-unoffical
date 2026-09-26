@@ -214,5 +214,55 @@ int main()
     write(ats161_generator, 0, base + 1);
     assert(!modguard::is_ats_161_smoke_generator(ats161_generator.data(), base));
 
+    // ETS2 1.61.1.1s and ATS 1.61.2.0s share the 1.61 particle_gen_u layout
+    // (count +0x630, size +0x54/+0x58, lifetime +0x62c) but use build-specific
+    // vtable address points.
+    const std::uintptr_t ets2161_vtable = base + 0x2e35488;
+    const std::uintptr_t ats162_vtable = base + 0x2e43508;
+    std::vector<std::uint8_t> gen161(0x700);
+
+    write(gen161, 0, ets2161_vtable);
+    set_ats161_layer(gen161, 40, 0.090F, 3.0F);
+    assert(modguard::is_ets2_161_smoke_generator(gen161.data(), base));
+    set_ats161_layer(gen161, 20, 0.040F, 0.7F);
+    assert(modguard::classify_ets2_161_smoke_generator(gen161.data(), base) == 1);
+    set_ats161_layer(gen161, 4, 0.020F, 0.2F);
+    assert(modguard::classify_ets2_161_smoke_generator(gen161.data(), base) == 2);
+    set_ats161_layer(gen161, 60, 0.040F, 2.0F);
+    assert(!modguard::is_ets2_161_smoke_generator(gen161.data(), base));
+    // The ATS 1.61.2.0 vtable must not satisfy the ETS2 classifier.
+    write(gen161, 0, ats162_vtable);
+    set_ats161_layer(gen161, 40, 0.090F, 3.0F);
+    assert(!modguard::is_ets2_161_smoke_generator(gen161.data(), base));
+    write(gen161, 0, base + 1);
+    assert(!modguard::is_ets2_161_smoke_generator(gen161.data(), base));
+
+    write(gen161, 0, ats162_vtable);
+    set_ats161_layer(gen161, 40, 0.090F, 3.0F);
+    assert(modguard::is_ats_162_smoke_generator(gen161.data(), base));
+    set_ats161_layer(gen161, 20, 0.040F, 0.7F);
+    assert(modguard::classify_ats_162_smoke_generator(gen161.data(), base) == 1);
+    set_ats161_layer(gen161, 4, 0.020F, 0.2F);
+    assert(modguard::classify_ats_162_smoke_generator(gen161.data(), base) == 2);
+    set_ats161_layer(gen161, 60, 0.040F, 2.0F);
+    assert(!modguard::is_ats_162_smoke_generator(gen161.data(), base));
+    // The obsolete +0x58/+0x5c pair must not classify for the 1.61 layout.
+    set_ats161_layer(gen161, 40, 0.5F, 3.0F);
+    write(gen161, 0x58, 0.090F);
+    write(gen161, 0x5c, 0.090F);
+    assert(!modguard::is_ats_162_smoke_generator(gen161.data(), base));
+    // The ETS2 1.61.1.1s vtable must not satisfy the ATS 1.61.2.0 classifier.
+    write(gen161, 0, ets2161_vtable);
+    set_ats161_layer(gen161, 40, 0.090F, 3.0F);
+    assert(!modguard::is_ats_162_smoke_generator(gen161.data(), base));
+    write(gen161, 0, base + 1);
+    assert(!modguard::is_ats_162_smoke_generator(gen161.data(), base));
+
+    // The shared helper selects the layer for each documented vtable pair.
+    write(gen161, 0, base + 0x2e35488);
+    set_ats161_layer(gen161, 40, 0.090F, 3.0F);
+    assert(modguard::classify_particle_gen_u_smoke(gen161.data(), base, 0x2e35488) == 0);
+    assert(modguard::classify_particle_gen_u_smoke(gen161.data(), base, 0x2e43508) == -1);
+
     return 0;
 }

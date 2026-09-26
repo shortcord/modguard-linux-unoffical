@@ -96,7 +96,7 @@ The particle hook writes to executable game memory. Treat every change in `parti
 - Add synthetic signature tests for each supported memory layout.
 - If a hook profile changes, document the game executable and evidence.
 
-The current source contains profiles for ATS 1.55, ATS 1.60, ETS2 1.55, and ETS2 1.60.1.7s. A profile is supported only when its version and executable checks pass.
+The current source contains active pinned profiles for ATS 1.60.1.8s, ATS 1.61.1.4s, ATS 1.61.2.0s, ETS2 1.60.1.7s, and ETS2 1.61.1.1s. The ATS 1.55 and ETS2 1.55 allocator profiles are disabled. A profile is supported only when its version and executable checks pass.
 
 ## Configuration And Telemetry
 

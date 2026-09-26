@@ -33,14 +33,24 @@ int classify_ets2_160_smoke_generator(const void *generator, std::uintptr_t imag
 int classify_ats_155_smoke_container(const void *container, std::uintptr_t image_base);
 int classify_ats_160_smoke_generator(const void *generator, std::uintptr_t image_base);
 int classify_ats_161_smoke_generator(const void *generator, std::uintptr_t image_base);
+int classify_ets2_161_smoke_generator(const void *generator, std::uintptr_t image_base);
+int classify_ats_162_smoke_generator(const void *generator, std::uintptr_t image_base);
 Ats161SmokeInspection inspect_ats_161_smoke_generator(
     const void *generator, std::uintptr_t image_base);
+
+// Shared 1.61 layout: particle_gen_u vtable at +0x0, count at +0x630,
+// particle_size at +0x54/+0x58, time_to_live at +0x62c. Each caller supplies
+// the build-specific vtable offset so the check stays pinned.
+int classify_particle_gen_u_smoke(const void *generator, std::uintptr_t image_base,
+                                  std::uintptr_t expected_vtable_offset);
 
 bool is_ets2_155_smoke_container(const void *container, std::uintptr_t image_base);
 bool is_ets2_160_smoke_generator(const void *generator, std::uintptr_t image_base);
 bool is_ats_155_smoke_container(const void *container, std::uintptr_t image_base);
 bool is_ats_160_smoke_generator(const void *generator, std::uintptr_t image_base);
 bool is_ats_161_smoke_generator(const void *generator, std::uintptr_t image_base);
+bool is_ets2_161_smoke_generator(const void *generator, std::uintptr_t image_base);
+bool is_ats_162_smoke_generator(const void *generator, std::uintptr_t image_base);
 
 bool particle_build_id_matches(const std::uint8_t *actual, std::size_t actual_size,
                                const std::uint8_t *expected, std::size_t expected_size);

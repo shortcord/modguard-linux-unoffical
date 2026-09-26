@@ -22,7 +22,9 @@ struct GameProfile {
     std::size_t constructor_size;
 };
 
-const std::array<GameProfile, 3> &game_profiles();
+inline constexpr std::size_t game_profile_count = 5;
+
+const std::array<GameProfile, game_profile_count> &game_profiles();
 
 } // namespace modguard
 

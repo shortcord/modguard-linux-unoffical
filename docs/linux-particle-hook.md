@@ -62,7 +62,9 @@ classifier. The current profiles are:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | ETS2 | 1.60.1.7s, telemetry schema `1.19` (`0x00010013`) | `spawn_function_entry` | `0x1fa8ab0` | `0x1bce2a0` | `0x1fad3b0` | `0x640` | `0x60` | `0x62c` | `classify_ets2_160_smoke_generator` |
 | ATS | 1.60.1.8s, telemetry schema `1.06` (`0x00010006`) | `spawn_function_entry` | `0x1fadac0` | `0x1bd32b0` | `0x1fb23c0` | `0x640` | `0x60` | `0x62c` | `classify_ats_160_smoke_generator` |
-| ATS | 1.61.1.4s, telemetry schema `1.06` (`0x00010006`) | `list_allocate_entry` | `0x1cbfea0` | `0x1cbfea0` | `0x20aaec0` | `0x668` | `0x60` | `0x62c` | `classify_ats_161_smoke_generator` |
+| ATS | 1.61.1.4s, telemetry schema `1.07` (`0x00010007`) | `list_allocate_entry` | `0x1cbfea0` | `0x1cbfea0` | `0x20aaec0` | `0x668` | `0x60` | `0x62c` | `classify_ats_161_smoke_generator` |
+| ETS2 | 1.61.1.1s, telemetry schema `1.20` (`0x00010014`) | `list_allocate_entry` | `0x1cb3d40` | `0x1cb3d40` | `0x209ed60` | `0x668` | `0x60` | `0x62c` | `classify_ets2_161_smoke_generator` |
+| ATS | 1.61.2.0s, telemetry schema `1.07` (`0x00010007`) | `list_allocate_entry` | `0x1cc1310` | `0x1cc1310` | `0x20ac330` | `0x668` | `0x60` | `0x62c` | `classify_ats_162_smoke_generator` |
 
 > **Disabled profiles.** The ATS 1.55 and ETS2 1.55
 > `allocator_trampoline` profiles are removed from the profile table. They
@@ -83,12 +85,12 @@ patch length because they also document the full observed function prefix.
 
 A profile is supported only when its fingerprint and machine-code checks pass.
 No wildcard signatures or broad version ranges are permitted (`AGENTS.md`).
-The ETS2 1.60.1.7s, ATS 1.60.1.8s, and ATS 1.61.1.4s profiles require an exact
-ELF build ID. For these profiles, the build ID is authoritative after the game
-ID matches. All active profiles are pinned. The ATS 1.60.x layout is verified
-for the ATS 1.60.1.8s executable only, so the ATS 1.60.x family is not accepted
-as a version fallback. `select_particle_profile` still supports an unpinned
-profile, but the built-in table has none.
+Every active profile requires an exact ELF build ID. The build ID is
+authoritative after the game ID matches. All active profiles are pinned. The
+ATS 1.60.x layout is verified for the ATS 1.60.1.8s executable only, so the ATS
+1.60.x family is not accepted as a version fallback. The same rule applies to
+the ETS2 1.61.1.x and ATS 1.61.x families. `select_particle_profile` still
+supports an unpinned profile, but the built-in table has none.
 
 ---
 
@@ -118,17 +120,18 @@ hook replaces the first 13 bytes of the spawn function entry with a jump to
 to `particle_generator_constructor_hook`. Both originals are reached through
 mapped trampolines. The trampolines run the displaced bytes and jump back.
 
-### 3.3 `list_allocate_entry` (ATS 1.61.1.4s)
+### 3.3 `list_allocate_entry` (ATS 1.61.1.4s, ETS2 1.61.1.1s, ATS 1.61.2.0s)
 
-ATS 1.61.1.4s calls a shared list allocator for each particle node. The hook
+These builds call a shared list allocator for each particle node. The hook
 replaces the first 13 bytes of this allocator with a jump. The callback passes
 all unrelated allocations to the trampoline without changes.
 
 Particle calls pass `generator + 0x668` and request a `0x60`-byte node. The
 callback subtracts `0x668` only after it checks the node size and pointer. It
-then checks the constructor registry and the ATS 1.61 vtable.
+then checks the constructor registry and the build-specific `particle_gen_u`
+vtable.
 
-All three ATS 1.61 particle call sites check the allocator result for
+The particle call sites in these builds check the allocator result for
 `nullptr`. Thus, the callback can safely suppress a recognized smoke request.
 
 ---
@@ -225,13 +228,27 @@ Then it reads the layer fields at game-specific offsets:
   the generator directly. It checks that vtable `+0x0` equals
   `image_base + 0x2d0f600`. It reads count at `+0x630`, size at `+0x58`/`+0x5c`,
   and lifetime at `+0x62c`.
-- `classify_ats_161_smoke_generator` (`particle_signature.cpp:108`): it takes
+- `classify_ats_161_smoke_generator` (`particle_signature.cpp`): it takes
   the generator directly. It
   checks that the `particle_gen_u` base vtable at `+0x0` equals
   `image_base + 0x2e41fc8`. It reads count at `+0x630`, size at
   `+0x54`/`+0x58`, and lifetime at `+0x62c`. The size is a two-float
   `particle_size` pair. The adjacent `+0x5c` field is `particle_size_var` and
   is not part of the signature.
+- `classify_ets2_161_smoke_generator` (`particle_signature.cpp`): it takes the
+  generator directly. It uses the shared 1.61 helper with the ETS2 1.61.1.1s
+  `particle_gen_u` vtable `image_base + 0x2e35488`. It reads count at `+0x630`,
+  size at `+0x54`/`+0x58`, and lifetime at `+0x62c`.
+- `classify_ats_162_smoke_generator` (`particle_signature.cpp`): it takes the
+  generator directly. It uses the shared 1.61 helper with the ATS 1.61.2.0s
+  `particle_gen_u` vtable `image_base + 0x2e43508`. It reads count at `+0x630`,
+  size at `+0x54`/`+0x58`, and lifetime at `+0x62c`.
+
+`classify_particle_gen_u_smoke` (`particle_signature.cpp`) holds the shared
+1.61 layout. It checks the vtable against a caller-supplied offset. Then it
+classifies the layer from count, size, and lifetime. Each build supplies its
+own vtable, so the check stays pinned to one executable. The ETS2 1.61.1.1s
+and ATS 1.61.2.0s classifiers call this helper.
 
 Any vtable mismatch or layer mismatch returns `-1`. The request is then passed
 to the original allocator unchanged.
@@ -424,10 +441,11 @@ The ATS 1.60.1.8s profile comes from the native Linux executable with SHA-256
 Its ELF build ID is `e109d085d57bbeca9a35c7a61df9703796568fe3`.
 The install flow requires this exact build ID before it changes executable memory.
 
-The recorded telemetry version is `0x00010006`. ATS 1.61.1.4s uses the same
-value. The install flow uses the exact build ID to select the correct ATS
-profile. The ATS 1.60.x family is pinned to this one build. A different
-ATS 1.60.x build is not supported.
+The recorded telemetry version is `0x00010006` (schema 1.06). The static
+telemetry descriptor at `0x295de20` records `game_id = ats` and this value.
+The install flow uses the exact build ID to select the correct ATS profile.
+The ATS 1.60.x family is pinned to this one build. A different ATS 1.60.x
+build is not supported.
 
 The spawn function starts at `0x1fadac0`. Its first 16 bytes are
 `55 48 89 e5 41 57 41 56 49 89 fe 41 55 41 54 53`.
@@ -448,8 +466,10 @@ The ATS 1.61.1.4s profile comes from the native Linux executable with SHA-256
 `c2d1b3d2eace307b68d4a8f945ef0fc35b6d334a68377a635e35170b0ddb1d37`.
 Its ELF build ID is `bbad4aec77909880502d055c9e96d2fe23ec153f`.
 
-The recorded telemetry version is `0x00010006`. ATS 1.60.1.8s uses the same
-value. The install flow uses the exact build ID to select the ATS 1.61 profile.
+The static telemetry descriptor at `0x2a67ca0` records `game_id = ats` and
+`schema = 0x00010007` (1.07). The plugin receives `0x00010007` from
+`scs_telemetry_init`. ATS 1.61.2.0s records the same schema value. The install
+flow uses the exact build ID to select the ATS 1.61 profile.
 
 The list allocator starts at `0x1cbfea0`. Its patched bytes are
 `55 48 89 e5 41 54 48 83 ec 18 4c 8b 27`. The base constructor starts at
@@ -472,6 +492,52 @@ bounded float probe found matches at `+0x54`, `+0x58`, `+0x64`, and `+0x6c`.
 The `+0x54`/`+0x58` pair is `particle_size`. The `+0x64`/`+0x6c` values are
 `particle_displacement` and coincide with the layer 2 size. The old
 `+0x58`/`+0x5c` check failed because `+0x5c` is `particle_size_var`.
+
+### 12.4 ETS2 1.61.1.1s evidence
+
+The ETS2 1.61.1.1s profile comes from the native Linux executable with SHA-256
+`16659c0454622cb9718f8cbfc08af198f7143632f8a01c55f8620278e2d43bac`.
+Its ELF build ID is `d2cb5aa082c669c8f5744ae329862f954dec71c2`.
+
+The static telemetry descriptor at `0x2a5ba00` records `game_id = eut2` and
+`schema = 0x00010014` (1.20). ETS2 1.61.1.0s records the same schema value.
+The install flow uses the exact build ID to select the ETS2 1.61 profile.
+
+This build moved from the 1.60 `spawn_function_entry` model to the 1.61
+`list_allocate_entry` model. The shared list allocator starts at `0x1cb3d40`.
+Its patched bytes are `55 48 89 e5 41 54 48 83 ec 18 4c 8b 27`. The base
+constructor starts at `0x209ed60` and installs the `particle_gen_u` vtable
+address point `0x2e35488`. The RTTI typeinfo for that vtable is
+`N5prism14particle_gen_uE`. The derived `particle_emitter_u` address point is
+`0x2e34bb8`.
+
+The particle paths pass `generator + 0x668` to the allocator. They request a
+`0x60`-byte node and check for `nullptr`. The spawn path loads the two-float
+`particle_size` pair from `+0x54` at `0x209bb8b`. The count is at `+0x630` and
+the lifetime is at `+0x62c`. The classifier uses the shared 1.61 helper with
+the ETS2 vtable `0x2e35488`.
+
+### 12.5 ATS 1.61.2.0s evidence
+
+The ATS 1.61.2.0s profile comes from the native Linux executable with SHA-256
+`9e6e82a56e045736558def1cb877b184ddc666c90af40c11667766d357c7a4a3`.
+Its ELF build ID is `e515a3ae857a3a84319d3579b94ba3acbe31edb5`.
+
+The static telemetry descriptor at `0x2a69140` records `game_id = ats` and
+`schema = 0x00010007` (1.07). The plugin receives `0x00010007` from
+`scs_telemetry_init`. The ATS 1.61.1.4s profile records the same schema value.
+
+The shared list allocator starts at `0x1cc1310`. Its patched bytes are
+`55 48 89 e5 41 54 48 83 ec 18 4c 8b 27`. The base constructor starts at
+`0x20ac330` and installs the `particle_gen_u` vtable address point `0x2e43508`.
+The RTTI typeinfo for that vtable is `N5prism14particle_gen_uE`. The derived
+`particle_emitter_u` address point is `0x2e42c38`.
+
+The particle paths pass `generator + 0x668` to the allocator. They request a
+`0x60`-byte node and check for `nullptr`. The spawn path loads the two-float
+`particle_size` pair from `+0x54` at `0x20a915b`. The count is at `+0x630` and
+the lifetime is at `+0x62c`. The classifier uses the shared 1.61 helper with
+the ATS vtable `0x2e43508`.
 
 ---
 

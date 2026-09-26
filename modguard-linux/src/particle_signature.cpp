@@ -105,10 +105,37 @@ int classify_ats_160_smoke_generator(const void *generator_pointer, std::uintptr
                        read<float>(generator + 0x62c));
 }
 
+int classify_particle_gen_u_smoke(const void *generator_pointer,
+                                  std::uintptr_t image_base,
+                                  std::uintptr_t expected_vtable_offset)
+{
+    if (!generator_pointer) {
+        return -1;
+    }
+    const auto *generator = static_cast<const std::uint8_t *>(generator_pointer);
+    if (read<std::uintptr_t>(generator) != image_base + expected_vtable_offset) {
+        return -1;
+    }
+    return smoke_layer(read<std::int32_t>(generator + 0x630),
+                       read<float>(generator + 0x54),
+                       read<float>(generator + 0x58),
+                       read<float>(generator + 0x62c));
+}
+
 int classify_ats_161_smoke_generator(const void *generator_pointer, std::uintptr_t image_base)
 {
     const auto inspection = inspect_ats_161_smoke_generator(generator_pointer, image_base);
     return inspection.base_vtable ? inspection.layer : -1;
+}
+
+int classify_ets2_161_smoke_generator(const void *generator_pointer, std::uintptr_t image_base)
+{
+    return classify_particle_gen_u_smoke(generator_pointer, image_base, 0x2e35488);
+}
+
+int classify_ats_162_smoke_generator(const void *generator_pointer, std::uintptr_t image_base)
+{
+    return classify_particle_gen_u_smoke(generator_pointer, image_base, 0x2e43508);
 }
 
 Ats161SmokeInspection inspect_ats_161_smoke_generator(
@@ -159,6 +186,16 @@ bool is_ats_160_smoke_generator(const void *generator, std::uintptr_t image_base
 bool is_ats_161_smoke_generator(const void *generator, std::uintptr_t image_base)
 {
     return classify_ats_161_smoke_generator(generator, image_base) >= 0;
+}
+
+bool is_ets2_161_smoke_generator(const void *generator, std::uintptr_t image_base)
+{
+    return classify_ets2_161_smoke_generator(generator, image_base) >= 0;
+}
+
+bool is_ats_162_smoke_generator(const void *generator, std::uintptr_t image_base)
+{
+    return classify_ats_162_smoke_generator(generator, image_base) >= 0;
 }
 
 bool particle_build_id_matches(const std::uint8_t *actual, std::size_t actual_size,

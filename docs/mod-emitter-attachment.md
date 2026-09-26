@@ -117,12 +117,30 @@ ATS 1.60.1.8s (`classify_ats_160_smoke_generator`, `particle_signature.cpp:92`):
 - Generator vtable at `+0x0` must equal `image_base + 0x2d15040`.
 - Reads count at `+0x630`, size at `+0x58` and `+0x5c`, lifetime at `+0x62c`.
 
-ATS 1.61.1.4s (`classify_ats_161_smoke_generator`, `particle_signature.cpp:108`):
+ATS 1.61.1.4s (`classify_ats_161_smoke_generator`, `particle_signature.cpp`):
 
 - The allocator receives `generator + 0x668`.
 - Generator vtable at `+0x0` must equal the `particle_gen_u` base address
   point `image_base + 0x2e41fc8`.
 - Reads count at `+0x630`, size at `+0x54` and `+0x58`, lifetime at `+0x62c`.
+
+ETS2 1.61.1.1s (`classify_ets2_161_smoke_generator`, `particle_signature.cpp`):
+
+- The allocator receives `generator + 0x668`.
+- Generator vtable at `+0x0` must equal the `particle_gen_u` base address
+  point `image_base + 0x2e35488`.
+- Reads count at `+0x630`, size at `+0x54` and `+0x58`, lifetime at `+0x62c`.
+
+ATS 1.61.2.0s (`classify_ats_162_smoke_generator`, `particle_signature.cpp`):
+
+- The allocator receives `generator + 0x668`.
+- Generator vtable at `+0x0` must equal the `particle_gen_u` base address
+  point `image_base + 0x2e43508`.
+- Reads count at `+0x630`, size at `+0x54` and `+0x58`, lifetime at `+0x62c`.
+
+The ETS2 1.61.1.1s and ATS 1.61.2.0s classifiers use the shared
+`classify_particle_gen_u_smoke` helper. Each classifier supplies its own
+vtable offset, so the check stays pinned to one executable.
 
 A vtable mismatch on any check makes the classifier return `-1`. The hook then forwards the call to the original allocator or spawn function with no change.
 
@@ -171,9 +189,10 @@ Public-unit identity matching remains open. The classifiers check vtable pointer
 
 ATS 1.60.1.8s uses the spawn-function-entry model. The spawn hook replaces the per-particle decision inside the spawn function and bypasses the allocator trampoline. Generators still register through the constructor hook, so the same registration table applies. Future work must not double-register generators in this model.
 
-ATS 1.61.1.4s uses the list-allocator-entry model. The hook passes unrelated
-allocations through the original trampoline. Recognized particle callers check
-for `nullptr`, so suppression does not enter a null-node unlink path.
+ATS 1.61.1.4s, ETS2 1.61.1.1s, and ATS 1.61.2.0s use the list-allocator-entry
+model. The hook passes unrelated allocations through the original trampoline.
+Recognized particle callers check for `nullptr`, so suppression does not enter a
+null-node unlink path.
 
 ## 10. Editing a mesh file
 

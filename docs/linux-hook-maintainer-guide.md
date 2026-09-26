@@ -65,7 +65,9 @@ Each `GameProfile` entry contains:
 
 The `profiles` table in `particle_hook.cpp` has the same order as `game_profiles()`.
 Its entries contain hook model details, container offsets, node size, lifetime offset, and classifiers.
-Keep both tables in the same order. The existing `static_assert` checks only the number of entries.
+Keep both tables in the same order. The `static_assert` checks the number of entries
+against `game_profile_count`. Update `game_profile_count` in `game_profiles.hpp` when you
+add a profile.
 
 Current active entries are:
 
@@ -73,12 +75,15 @@ Current active entries are:
 | --- | --- | --- | --- | --- |
 | ETS2 1.60.1.7s | `eut2` | `0x00010013` | `7fa4c9e7df8004a776d9e355e7a8512e07fe6072` | `spawn_function_entry` |
 | ATS 1.60.1.8s | `ats` | `0x00010006` | `e109d085d57bbeca9a35c7a61df9703796568fe3` | `spawn_function_entry` |
-| ATS 1.61.1.4s | `ats` | `0x00010006` | `bbad4aec77909880502d055c9e96d2fe23ec153f` | `list_allocate_entry` |
+| ATS 1.61.1.4s | `ats` | `0x00010007` | `bbad4aec77909880502d055c9e96d2fe23ec153f` | `list_allocate_entry` |
+| ETS2 1.61.1.1s | `eut2` | `0x00010014` | `d2cb5aa082c669c8f5744ae329862f954dec71c2` | `list_allocate_entry` |
+| ATS 1.61.2.0s | `ats` | `0x00010007` | `e515a3ae857a3a84319d3579b94ba3acbe31edb5` | `list_allocate_entry` |
 
-The ATS 1.60.1.8s and ATS 1.61.1.4s profiles share a telemetry version.
+The ATS 1.61.1.4s and ATS 1.61.2.0s profiles share a telemetry version.
 The exact build ID selects the correct profile. All active profiles are pinned.
 The ATS 1.60.x layout is verified for the ATS 1.60.1.8s executable only. Do not
 add an unpinned ATS 1.60.x fallback without per-build machine-code evidence.
+The same rule applies to the ETS2 1.61.1.x and ATS 1.61.x families.
 
 ## Adding a Profile
 

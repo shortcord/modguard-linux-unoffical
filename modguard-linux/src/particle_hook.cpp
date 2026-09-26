@@ -56,13 +56,19 @@ const HookProfile profiles[] = {
     {HookModel::list_allocate_entry,
      0x1cbfea0, 0x1cbfea0, 0x20aaec0, 0x668, 0x60, 0x62c,
      classify_ats_161_smoke_generator},
+    {HookModel::list_allocate_entry,
+     0x1cb3d40, 0x1cb3d40, 0x209ed60, 0x668, 0x60, 0x62c,
+     classify_ets2_161_smoke_generator},
+    {HookModel::list_allocate_entry,
+     0x1cc1310, 0x1cc1310, 0x20ac330, 0x668, 0x60, 0x62c,
+     classify_ats_162_smoke_generator},
     // The 1.55 allocator_trampoline profiles are disabled. The game reads
     // the node returned by the patched allocator without a NULL check in
     // list-unlink paths (ATS crash dumps: SIGSEGV at 0x48/0x30/0x60, PC in
     // the node-unlink function at VA 0x1c3e620). Suppression by returning
     // nullptr crashes the game. See docs/linux-particle-hook.md.
 };
-static_assert(std::size(profiles) == 3);
+static_assert(std::size(profiles) == game_profile_count);
 
 std::atomic<float> demand{0.0F};
 std::atomic<bool> eligible{false};
@@ -483,7 +489,7 @@ bool install_particle_hook(const char *game_id, std::uint32_t game_version)
     main_build_id_size = 0;
     dl_iterate_phdr(find_main_image, &image_base);
     const auto &profile_table = game_profiles();
-    std::array<ParticleProfileIdentity, 3> profile_identities{};
+    std::array<ParticleProfileIdentity, game_profile_count> profile_identities{};
     for (std::size_t index = 0; index < profile_table.size(); ++index) {
         profile_identities[index] = {
             profile_table[index].game_id, profile_table[index].telemetry_version,

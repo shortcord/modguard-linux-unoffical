@@ -253,7 +253,7 @@ Tests are standalone executables that use `assert` and are registered with CTest
 | --- | --- | --- |
 | `exhaust_model_test` | `tests/exhaust_model_test.cpp` | Engine-off zero, smoothing, shift transient, NaN inputs, launch, coast decay, `SmokeHook=0`, continuous smoke, heavy-vs-light load, weighted terms, free-rev gate |
 | `config_test` | `tests/config_test.cpp` | Section filtering, bool variants, inline comments, sanitize clamping, invalid values, missing file |
-| `particle_signature_test` | `tests/particle_signature_test.cpp` | ETS2 1.55/1.60 and ATS 1.55/1.60/1.61 classification, vtable mismatches, non-smoke layers, profile selection, build-ID mismatches |
+| `particle_signature_test` | `tests/particle_signature_test.cpp` | ETS2 1.55/1.60/1.61 and ATS 1.55/1.60/1.61/1.61.2 classification, vtable mismatches, non-smoke layers, profile selection, build-ID mismatches |
 | `particle_admission_test` | `tests/particle_admission_test.cpp` | Cross-sampler determinism, per-layer independence, per-call independence |
 | `plugin_test` | `tests/plugin_test.cpp` | Full init/shutdown cycle, event and channel registration counts, configuration callback, datagram JSON shape, NaN exclusion, unsupported game/version rejection |
 
