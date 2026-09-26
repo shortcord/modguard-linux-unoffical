@@ -3,6 +3,11 @@ modguard-linux/build/
 modguard-linux/build-*/
 smoke-mod/build-cmake/
 
+# Generated release archives and checksums (see build.sh)
+release-linux.tar.gz
+release-linux.tar.gz.checksums
+v0.*.checksums
+
 # Local game binaries and symlinks (not distributed)
 ats-current
 ets2-current
