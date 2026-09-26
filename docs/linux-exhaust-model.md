@@ -237,8 +237,12 @@ an engine restart.
 
 All keys live under the case-sensitive `[RealisticSmoke]` section. Missing or
 invalid values use the safe defaults shown. The ranges are enforced by
-`sanitize()` in `config.cpp:108-126`. Booleans accept `1/true/yes/on` and
+`sanitize()` in `config.cpp:167-198`. Booleans accept `1/true/yes/on` and
 `0/false/no/off` (case-insensitive).
+
+You can change these keys while the game runs. The plugin applies a saved
+change on the next simulation frame. See section 6.2 of
+`linux-plugin-architecture.md` for the reload contract.
 
 ### 4.1 Hook and behavior
 

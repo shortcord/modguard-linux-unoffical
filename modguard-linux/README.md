@@ -85,6 +85,8 @@ The plugin reads `modguard_linux.ini` from the game's `mod` directory:
 
 Set `MODGUARD_CONFIG` to an explicit file path to override this location. A fully commented template with every key and its default is at [`modguard_linux.ini.example`](modguard_linux.ini.example). Copy it to `modguard_linux.ini` in the applicable mod directory. Adjust the values as necessary.
 
+You can change the configuration while the game runs. Edit `modguard_linux.ini` and save it. The plugin applies the new values on the next simulation frame. You do not restart the game. A normal save, an atomic rename save, and a `touch` all trigger a reload. If the file is missing or invalid, the plugin keeps the previous configuration. If a single value is invalid, the plugin uses the default for that key. See `../docs/linux-plugin-architecture.md` section 6.2 for the reload contract.
+
 The supported `[RealisticSmoke]` keys and defaults match `../reverse-enginnering/MODGuard_RE.md`. `SmokeHook=0` disables the in-process particle hook. `ContinuousSmoke=1` keeps a small baseline while the engine runs.
 
 Load-specific keys (also under `[RealisticSmoke]`):
@@ -119,7 +121,7 @@ No 100/2500/10000 particle bucket is emitted. Those values are the original plug
 
 The canonical research reference is `../reverse-enginnering/MODGuard_RE.md`. Files under `../docs/` contain earlier hypotheses. They may not include later corrections. The current implementation is documented in:
 
-- [`../docs/linux-plugin-architecture.md`](../docs/linux-plugin-architecture.md) — plugin lifecycle, events, channels, diagnostics, build, and tests.
+- [`../docs/linux-plugin-architecture.md`](../docs/linux-plugin-architecture.md) — plugin lifecycle, events, channels, configuration reload, diagnostics, build, and tests.
 - [`../docs/linux-exhaust-model.md`](../docs/linux-exhaust-model.md) — the demand model and the full configuration table.
 - [`../docs/linux-particle-hook.md`](../docs/linux-particle-hook.md) — the inline game-memory hook and admission sampler.
 - [`../docs/mod-smoke-variants.md`](../docs/mod-smoke-variants.md) — the clean smoke-mod presets and packaging.

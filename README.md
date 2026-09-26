@@ -69,7 +69,7 @@ Particle-hook support is fail closed. If a game version or machine-code signatur
 | `reverse-enginnering/MODGuard_RE.md` | Canonical reverse-engineering specification and current research conclusions. |
 | `docs/` | Detailed analysis, porting notes, historical research, and implementation documentation. |
 | `docs/README.md` | Index of research and implementation documents. |
-| `docs/linux-plugin-architecture.md` | Native Linux plugin architecture, lifecycle, diagnostics, build, and tests. |
+| `docs/linux-plugin-architecture.md` | Native Linux plugin architecture, lifecycle, configuration reload, diagnostics, build, and tests. |
 | `docs/linux-exhaust-model.md` | `exhaust_demand_v0` model and the full `[RealisticSmoke]` configuration table. |
 | `docs/linux-particle-hook.md` | In-process particle hook, profiles, classifiers, and admission sampler. |
 | `docs/mod-smoke-variants.md` | Clean smoke-mod presets and packaging. |
@@ -205,7 +205,7 @@ The canonical specification records the source binary hash, the recovered SDK be
 
 Implementation documentation for the current Linux plugin and the smoke-mod presets:
 
-- [`docs/linux-plugin-architecture.md`](docs/linux-plugin-architecture.md): plugin lifecycle, events, channels, diagnostics, build, and tests.
+- [`docs/linux-plugin-architecture.md`](docs/linux-plugin-architecture.md): plugin lifecycle, events, channels, configuration reload, diagnostics, build, and tests.
 - [`docs/linux-exhaust-model.md`](docs/linux-exhaust-model.md): demand model and full configuration table.
 - [`docs/linux-particle-hook.md`](docs/linux-particle-hook.md): inline game-memory hook and admission sampler.
 - [`docs/mod-smoke-variants.md`](docs/mod-smoke-variants.md): clean smoke-mod presets and packaging.

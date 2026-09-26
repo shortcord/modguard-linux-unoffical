@@ -67,6 +67,7 @@ separate from the reverse-engineering research above.
    - `modguard-linux/` layout and vendored SCS SDK ABI subset
    - `scs_telemetry_init` / `scs_telemetry_shutdown` lifecycle
    - Event and channel callbacks, configuration callback
+   - Configuration loader and live reload watcher
    - Diagnostic Unix datagram socket and `exhaust_demand_v0` JSON schema
    - CMake build targets and the CTest suite
 
