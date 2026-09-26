@@ -70,7 +70,7 @@ LifetimeMultiplier=1
 ; --- Throttle shaping ---
 
 ; How strongly demand follows the throttle. Range [0.1, 5].
-ThrottleGatePower=1.5
+ThrottleGatePower=0.9
 
 ; --- Smoothing and transients ---
 
