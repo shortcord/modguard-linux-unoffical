@@ -26,9 +26,9 @@ The shared tree contains all truck-specific `.pmg` emitter placement data. The c
 
 ---
 
-## 2. The three smoke layers
+## 2. Smoke signatures
 
-The companion mod defines three `particle_gen` entries inside one `model_particle : model.particle.smoke_new` block. The Linux particle hook identifies these layers by `particles_max_count`, `particle_size`, and `time_to_live` (see `linux-particle-hook.md` section 6):
+The companion mod defines three `particle_gen` entries inside one `model_particle : model.particle.smoke_new` block. The Linux particle hook identifies these legacy layers by `particles_max_count`, `particle_size`, and `time_to_live` (see `linux-particle-hook.md` section 6):
 
 | Layer | `particles_max_count` | `particle_size` | `time_to_live` | Role |
 | --- | --- | --- | --- | --- |
@@ -36,13 +36,15 @@ The companion mod defines three `particle_gen` entries inside one `model_particl
 | 1 | 20 | 0.040 | 0.7 | Mid-distance drift. |
 | 2 | 4  | 0.020 | 0.2 | Short-lived core puff. |
 
-Every clean preset must keep these three count/size/lifetime signatures exactly. If a preset does not, the hook will not recognize the layers. The hook will pass all spawn requests through to the original allocator. Other fields (alpha, flow speed, color keys, displacement, rotation, scale acceleration) are free to differ between presets.
+Every clean preset that uses the legacy layout must keep these three count/size/lifetime signatures exactly. If a preset does not, the hook will not recognize the layers. The hook will pass all spawn requests through to the original allocator. Other fields (alpha, flow speed, color keys, displacement, rotation, scale acceleration) are free to differ between presets.
+
+A preset can instead use the dynamic-blend signature set. Section 3.4 describes that layout. A dynamic-blend preset requires the updated plugin. An older plugin does not recognize the dynamic bands.
 
 ---
 
 ## 3. Clean presets (`smoke-mod/`)
 
-Three clean presets are provided as source under `smoke-mod/`. Each lives in its own directory and contains the files that overlay the shared tree:
+Four clean presets are provided as source under `smoke-mod/`. Each lives in its own directory and contains the files that overlay the shared tree:
 
 - `unit/hookup/smoke_new.sii` — the replacement particle definition.
 - `model/particle/pipe.dds` — a feathered, edge-free soft cloud texture that avoids obvious billboard boundaries. Same DX10 `BC3_UNORM_SRGB` format and the original `/model/particle/pipe.dds` path.
@@ -82,7 +84,23 @@ Notable differences from `soft-haze`:
 - Darker `key_color` values.
 - Hook-signature `time_to_live` values kept identical to the fixture.
 
-All three presets keep the three count/size/lifetime signatures identical to the fixture so the particle hook still recognizes them.
+All three legacy presets keep the three count/size/lifetime signatures identical to the fixture so the particle hook still recognizes them.
+
+### 3.4 `dynamic-blend`
+
+`smoke-mod/dynamic-blend/unit/hookup/smoke_new.sii` — smoke that grows and darkens as engine demand rises. It uses the dynamic-blend signature set. All three generators share count `24` and lifetime `3.0`. Only the base size differs:
+
+| Band | `particles_max_count` | `particle_size` | `time_to_live` | Appearance |
+| --- | --- | --- | --- | --- |
+| low | 24 | 0.030 | 3.0 | Small, light, thin. |
+| medium | 24 | 0.060 | 3.0 | Default mid grey. |
+| high | 24 | 0.120 | 3.0 | Large, dark, dense. |
+
+The plugin maps the smoke demand to three band weights (`linux-particle-hook.md` section 8.1). At low demand the low band dominates. At high demand the high band dominates. The weights sum to one, so the total emission does not change. Existing particles are not touched. They expire by lifetime, so the change is smooth.
+
+All three bands share the same flow, displacement, growth, and lifetime-random values. Each band sets its own size variance, alpha, growth, and color keys. This is the appearance that the weight blend selects.
+
+The preset requires the updated plugin. An older plugin does not recognize the dynamic bands and passes all spawns through unchanged.
 
 ---
 
@@ -132,7 +150,7 @@ To create a new smoke preset, follow these steps:
 1. **Create the folder structure**. Make a new directory under `smoke-mod/<variant_name>/`. Copy the structure from an existing preset (`soft-haze` is a good template).
 
 2. **Create the particle definition**. Create a file at `unit/hookup/smoke_new.sii`. Use an existing variant as a template.
-    - **Important**: You must keep the `particles_max_count`, `particle_size`, and `time_to_live` values for the three `particle_gen` entries exactly as they are in the original companion mod. The Linux particle hook uses these values as signatures to identify the layers. If you change them, the hook will not work.
+    - **Important**: You must keep the `particles_max_count`, `particle_size`, and `time_to_live` values for the three `particle_gen` entries exactly as they are in the original companion mod. The Linux particle hook uses these values as signatures to identify the layers. If you change them, the hook will not work. To create a size-blending preset, use the `dynamic-blend` signature set and the updated plugin instead (section 3.4).
     - You can change other values (such as `base_alpha`, `flow_speed`, or `key_color`) to change the look and behavior of the smoke.
     - To make the smoke linger longer than the SII lifetime, set `LifetimeMultiplier` in `modguard_linux.ini`. Range [0, 60]. A value of 20 makes layer 0 last about 60s. The plugin caches the original `time_to_live` at generator registration and writes `original * multiplier` on every admitted spawn. The override is idempotent. Successive spawns do not compound on the previous scaled value.
 
@@ -153,6 +171,7 @@ Outputs (build artifacts, not committed):
 - `smoke-mod/build-cmake/PM_389_Smoke_soft-haze.zip`
 - `smoke-mod/build-cmake/PM_389_Smoke_subtle.zip`
 - `smoke-mod/build-cmake/PM_389_Smoke_dark-long.zip`
+- `smoke-mod/build-cmake/PM_389_Smoke_dynamic-blend.zip`
 
 Enable one of these in the game mod manager. The Linux plugin does not install or modify the companion mod.
 
@@ -164,12 +183,14 @@ You must check the final visual tuning in game. The repository cannot reproduce 
 
 If a preset looks wrong in game, adjust the non-signature fields in its `smoke_new.sii`. Then repackage the preset. If you change `particles_max_count`, `particle_size`, or `time_to_live`, update the hook classifiers and tests at the same time.
 
+For `dynamic-blend`, the per-band counters in the plugin diagnostic output show the request and admission counts for each band. Use them to make sure that all three bands request particles at a similar rate. If one band requests far fewer particles, its flow or emission settings differ from the others.
+
 ---
 
 ## 7. Related documents
 
 - `../smoke-mod/README.md` — operator-facing build and install instructions for the smoke-mod presets.
-- `linux-particle-hook.md` — how the hook recognizes the three layers by count, size, and lifetime.
+- `linux-particle-hook.md` — how the hook recognizes the smoke identities by count, size, and lifetime, and how it blends the dynamic bands.
 - `linux-plugin-architecture.md` — plugin install and the mod manager workflow.
 - `../reverse-enginnering/MODGuard_RE.md` section 5.2 — the analyzed PMG hookup layout (research reference only).
 - `../docs/03-smoke-mod-analysis.md` — the companion mod content breakdown (research reference only).

@@ -11,13 +11,13 @@ int main()
     a.frame_start();
     b.frame_start();
 
-    for (int layer = 0; layer < 3; ++layer) {
+    for (int layer = 0; layer <= modguard::particle_identity_max; ++layer) {
         for (int i = 0; i < 8; ++i) {
             assert(a.sample(layer) == b.sample(layer));
         }
     }
 
-    for (int layer = 0; layer < 3; ++layer) {
+    for (int layer = 0; layer < modguard::particle_identity_max; ++layer) {
         for (int i = 0; i < 8; ++i) {
             assert(a.sample(layer) != a.sample(layer + 1));
         }

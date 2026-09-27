@@ -57,22 +57,32 @@ python3 tools/listen.py
 The default socket is `/tmp/modguard-exhaust-<uid>.sock`. Set `MODGUARD_EXHAUST_SOCKET` in the game's environment to use another absolute path. Messages have this shape:
 
 ```json
-{"schema":"exhaust_demand_v0","seq":42,"time_us":123456,"demand":0.83,"raw_demand":1.25,"session_peak":1.25,"throttle":0.70,"rpm":1450.0,"rpm_limit":2100.0,"speed":18.4,"gear":8,"engine":true,"cargo_loaded":true,"cargo_mass":18500.0,"hook_active":true,"particle_constructors":12,"particle_candidates":720,"particle_registered":640,"smoke_requests":600,"admitted_requests":531,"suppressed_requests":69}
+{"schema":"exhaust_demand_v0","seq":42,"time_us":123456,"demand":0.83,"raw_demand":1.25,"session_peak":1.25,"throttle":0.70,"rpm":1450.0,"rpm_limit":2100.0,"speed":18.4,"gear":8,"engine":true,"cargo_loaded":true,"cargo_mass":18500.0,"hook_active":true,"particle_constructors":12,"particle_candidates":720,"particle_registered":640,"smoke_requests":600,"admitted_requests":531,"suppressed_requests":69,"dynamic_low_requests":0,"dynamic_low_admitted":0,"dynamic_medium_requests":0,"dynamic_medium_admitted":0,"dynamic_high_requests":0,"dynamic_high_admitted":0}
 ```
 
 The socket is diagnostic only. Particle control happens in-process, like the Windows plugin. Datagram loss is expected. It never blocks the game.
 
 The particle counters are cumulative for the current hook installation. They show constructors, candidate calls, registry matches, smoke requests, admissions, and suppressions. The first counter that stays at zero narrows the failed hook stage. The registry contains all particle generators, not only exhaust generators.
 
+The `dynamic_*` counters are nonzero only when the `dynamic-blend` preset is active. They show the request and admission counts for the low, medium, and high appearance bands. Use them to make sure that all three bands request particles at a similar rate.
+
 
 
 ## Particle Hook
 
-The ATS 1.60.1.8s backend detours the spawn function at `0x1fadac0`. The ATS 1.61.1.4s backend detours the list allocator at `0x1cbfea0`. The ATS 1.61.2.0s backend detours the list allocator at `0x1cc1310`. The ETS2 1.60.1.7s backend detours the spawn function at `0x1fa8ab0`. The ETS2 1.61.1.1s backend detours the list allocator at `0x1cb3d40`. Each backend checks the complete patch bytes and the applicable `particle_gen_u` constructor prefix. The replacement uses a constructor-populated registry to find the generator. It checks the game-specific vtable. It recognizes the companion mod's three documented layers by count, size, and lifetime. Non-matching generators always use the original game function.
+The ATS 1.60.1.8s backend detours the spawn function at `0x1fadac0`. The ATS 1.61.1.4s backend detours the list allocator at `0x1cbfea0`. The ATS 1.61.2.0s backend detours the list allocator at `0x1cc1310`. The ETS2 1.60.1.7s backend detours the spawn function at `0x1fa8ab0`. The ETS2 1.61.1.1s backend detours the list allocator at `0x1cb3d40`. Each backend checks the complete patch bytes and the applicable `particle_gen_u` constructor prefix. The replacement uses a constructor-populated registry to find the generator. The registry caches the smoke identity and the original lifetime at construction. The hook checks the game-specific vtable. It recognizes the companion mod's three documented layers by count, size, and lifetime. Non-matching generators always use the original game function.
 
 For matching layers, normalized demand becomes a deterministic 24-bit admission threshold. Rejected spawn calls return without spawning. Accepted calls reach the game's original spawn function. Existing particles and particle fields are not changed. The plugin attempts to restore the original bytes during telemetry shutdown. If restoration fails, it keeps its trampoline mapped.
 
-Multi-pipe setups emit consistently because admission is synchronized per layer. Each frame, every recognized smoke layer draws its decisions from a shared per-layer ordinal mixed with the frame number. Corresponding generators on different pipes receive the identical admission decision. They produce the same amount of smoke over time. Sprite position, rotation, lifetime, and size randomization remain independent. This preserves a natural appearance.
+Multi-pipe setups emit consistently because admission is synchronized per identity. Each frame, every recognized smoke generator draws its decisions from a shared per-identity ordinal mixed with the frame number. Corresponding generators on different pipes receive the identical admission decision. They produce the same amount of smoke over time. Sprite position, rotation, lifetime, and size randomization remain independent. This preserves a natural appearance.
+
+### Size Blending
+
+The `dynamic-blend` preset defines three appearance bands: small and light, default, and large and dark. All three bands share one particle count and one lifetime, so they request particles at the same rate. Only the base size differs. The plugin maps the smoke demand to three band weights. The weights sum to one, so the demanded emission is split across the bands and the total emission does not change.
+
+Below half demand, the smoke uses the small and default bands. Above half demand, it uses the default and large bands. The result is a smooth change from light to dark and from small to large as the engine works harder. Existing particles are not changed. They expire by lifetime, so the transition is natural.
+
+The legacy three-layer presets (`soft-haze`, `subtle`, `dark-long`) keep the original behavior.
 
 ## Configuration
 

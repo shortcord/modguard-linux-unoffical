@@ -25,7 +25,8 @@ modguard-linux/
 │   ├── game_detector.{hpp,cpp}   ELF build-ID and profile detection
 │   ├── game_profiles.{hpp,cpp}   Supported-game profile table
 │   ├── particle_hook.{hpp,cpp}   Inline game-memory hook
-│   ├── particle_signature.{hpp,cpp}  Smoke-layer classifiers
+│   ├── particle_signature.{hpp,cpp}  Generator classifiers
+│   ├── particle_blend.{hpp,cpp}  Dynamic-blend band weights
 │   └── particle_admission.{hpp,cpp}  Synchronized admission sampler
 ├── tests/                  Standalone CTest executables
 └── tools/
@@ -39,7 +40,7 @@ Five static libraries are built from the source and linked into the shared objec
 - `config_runtime` — `config_runtime.cpp`. It links `exhaust_model`.
 - `config_watcher` — `config_watcher.cpp`. It links `config_runtime` and `Threads`.
 - `game_detector` — `game_detector.cpp`, `game_profiles.cpp`.
-- `particle_hook` — `particle_hook.cpp`, `particle_signature.cpp`, `particle_admission.cpp`. It links `dl` and `game_detector`.
+- `particle_hook` — `particle_hook.cpp`, `particle_signature.cpp`, `particle_admission.cpp`, `particle_blend.cpp`. It links `dl` and `game_detector`.
 
 The shared library `modguard_linux.so` is built from `plugin.cpp` and links the static libraries. See `modguard-linux/CMakeLists.txt:8-45`.
 
@@ -183,7 +184,10 @@ If the path is too long for `sun_path`, output is disabled with a warning. The s
  "cargo_mass":18500.0,"hook_active":true,
  "particle_constructors":12,"particle_candidates":720,
  "particle_registered":640,"smoke_requests":600,
- "admitted_requests":531,"suppressed_requests":69}
+ "admitted_requests":531,"suppressed_requests":69,
+ "dynamic_low_requests":0,"dynamic_low_admitted":0,
+ "dynamic_medium_requests":0,"dynamic_medium_admitted":0,
+ "dynamic_high_requests":0,"dynamic_high_admitted":0}
 ```
 
 Field notes:
@@ -196,9 +200,10 @@ Field notes:
 - `particle_constructors` counts calls to the hooked generator constructor.
 - `particle_candidates` counts calls that have the profile node size and a valid candidate pointer.
 - `particle_registered` counts candidates that match the constructor registry.
-- `smoke_requests` counts registered candidates that match a smoke layer signature.
+- `smoke_requests` counts registered candidates that match a smoke identity.
 - `admitted_requests` counts smoke requests that reach the original game function.
 - `suppressed_requests` counts smoke requests that the demand gate rejects.
+- `dynamic_low_requests` and `dynamic_low_admitted` count the low band. The `dynamic_medium_*` and `dynamic_high_*` fields do the same for the medium and high bands. These counters are nonzero only when the `dynamic-blend` preset is active. They are subsets of `smoke_requests` and `admitted_requests`.
 
 The particle counters are cumulative for the current hook installation. The hook callbacks update them with relaxed atomic operations.
 
@@ -282,7 +287,7 @@ The watcher stops when `scs_telemetry_shutdown` resets it. The destructor joins 
 | `exhaust_model` | static | `exhaust_model.cpp`, `config.cpp` | — |
 | `config_runtime` | static | `config_runtime.cpp` | `exhaust_model` |
 | `config_watcher` | static | `config_watcher.cpp` | `config_runtime`, `Threads` |
-| `particle_hook` | static | `particle_hook.cpp`, `particle_signature.cpp`, `particle_admission.cpp` | `dl`, `game_detector` |
+| `particle_hook` | static | `particle_hook.cpp`, `particle_signature.cpp`, `particle_admission.cpp`, `particle_blend.cpp` | `dl`, `game_detector` |
 | `game_detector` | static | `game_detector.cpp`, `game_profiles.cpp` | — |
 | `modguard_linux` | shared | `plugin.cpp` | `exhaust_model`, `config_runtime`, `config_watcher`, `particle_hook`, `Threads` |
 
@@ -309,8 +314,9 @@ Tests are standalone executables that use `assert` and are registered with CTest
 | `exhaust_model_test` | `tests/exhaust_model_test.cpp` | Engine-off zero, smoothing, shift transient, NaN inputs, launch, coast decay, `SmokeHook=0`, continuous smoke, heavy-vs-light load, weighted terms, free-rev gate |
 | `config_test` | `tests/config_test.cpp` | Section filtering, bool variants, inline comments, sanitize clamping, invalid values, missing file |
 | `game_detector_test` | `tests/game_detector_test.cpp` | ELF build-ID detection, profile selection, code-byte checks, unsupported and corrupt binaries |
-| `particle_signature_test` | `tests/particle_signature_test.cpp` | ETS2 1.55/1.60/1.61 and ATS 1.55/1.60/1.61/1.61.2 classification, vtable mismatches, non-smoke layers, profile selection, build-ID mismatches |
-| `particle_admission_test` | `tests/particle_admission_test.cpp` | Cross-sampler determinism, per-layer independence, per-call independence |
+| `particle_signature_test` | `tests/particle_signature_test.cpp` | ETS2 1.55/1.60/1.61 and ATS 1.55/1.60/1.61/1.61.2 classification, dynamic-blend bands, vtable mismatches, non-smoke layers, profile selection, build-ID mismatches |
+| `particle_admission_test` | `tests/particle_admission_test.cpp` | Cross-sampler determinism, per-identity independence, per-call independence |
+| `particle_blend_test` | `tests/particle_blend_test.cpp` | Blend-weight anchors, weight range, weight sum, clamping of invalid demand |
 | `lifetime_override_test` | `tests/lifetime_override_test.cpp` | Lifetime-multiplier scaling and idempotence |
 | `hook_patch_test` | `tests/hook_patch_test.cpp` | Byte check before patch, fail-closed on mismatch, restore failure rollback |
 | `plugin_test` | `tests/plugin_test.cpp` | Full init/shutdown cycle, event and channel registration counts, configuration callback, datagram JSON shape, NaN exclusion, unsupported game/version rejection |

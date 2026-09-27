@@ -26,8 +26,28 @@ struct Ats161SmokeInspection {
 
 constexpr std::size_t no_particle_profile = static_cast<std::size_t>(-1);
 
-// Layer classifiers return the smoke layer index (0, 1, or 2) for the three
-// documented generators, or -1 when the object is not a recognized smoke layer.
+// Smoke identity values returned by every classifier.
+//
+// -1 means "not a recognized smoke generator". The three legacy plume layers
+// are 0, 1, and 2. The three dynamic-blend appearance bands are 3, 4, and 5.
+// The dynamic bands all share one count and one lifetime so each generator
+// requests particles at the same rate; only the base size differs. That equal
+// request rate is what makes weighted admission blend without changing the
+// total emission.
+constexpr int particle_identity_none = -1;
+constexpr int particle_identity_legacy_haze = 0;
+constexpr int particle_identity_legacy_mid = 1;
+constexpr int particle_identity_legacy_core = 2;
+constexpr int particle_identity_dynamic_low = 3;
+constexpr int particle_identity_dynamic_medium = 4;
+constexpr int particle_identity_dynamic_high = 5;
+constexpr int particle_identity_max = particle_identity_dynamic_high;
+
+// Number of independent admission-sampler streams. One per identity value.
+constexpr std::size_t particle_identity_stream_count = 6;
+
+// Layer classifiers return a smoke identity value, or particle_identity_none
+// when the object is not a recognized smoke generator.
 int classify_ets2_155_smoke_container(const void *container, std::uintptr_t image_base);
 int classify_ets2_160_smoke_generator(const void *generator, std::uintptr_t image_base);
 int classify_ats_155_smoke_container(const void *container, std::uintptr_t image_base);

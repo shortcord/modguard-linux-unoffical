@@ -82,13 +82,14 @@ separate from the reverse-engineering research above.
      ETS2 1.60.1.7s, and ETS2 1.61.1.1s; the 1.55 allocator profiles are
      disabled because NULL suppression crashes the game
    - Allocator-trampoline, allocator-entry, and spawn-function-entry models
-   - Trampoline construction, generator registry, layer classifiers
+   - Trampoline construction, generator registry, generator classifiers
    - Synchronized `LayerSampler` admission and the 24-bit threshold
+   - Dynamic-blend band weights
    - Install/shutdown flow and safety constraints
 
 9. **[`mod-smoke-variants.md`](mod-smoke-variants.md)** — Clean smoke-mod presets
-   - The three documented layer signatures (count, size, lifetime)
-   - `smoke-mod/soft-haze` and `smoke-mod/subtle` presets
+   - The legacy layer signatures and the dynamic-blend band signatures (count, size, lifetime)
+   - `smoke-mod/soft-haze`, `smoke-mod/subtle`, `smoke-mod/dark-long`, and `smoke-mod/dynamic-blend` presets
    - `smoke-mod/CMakeLists.txt` packaging (opt-in target)
    - Relationship to the shared `smoke-mod/_shared/` companion-mod tree
 

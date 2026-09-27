@@ -20,7 +20,7 @@ project(smoke_mod_variants VERSION 1.0.0 LANGUAGES NONE)
 # The default target builds nothing. Use `smoke_mod_variants` to package
 # all presets, or `smoke_mod_<variant>` for a single preset.
 
-set(SMOKE_MOD_VARIANTS soft-haze subtle dark-long)
+set(SMOKE_MOD_VARIANTS soft-haze subtle dark-long dynamic-blend)
 
 set(shared_dir "${CMAKE_CURRENT_SOURCE_DIR}/_shared")
 

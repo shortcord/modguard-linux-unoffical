@@ -1,6 +1,7 @@
 #include "particle_hook.hpp"
 
 #include "particle_admission.hpp"
+#include "particle_blend.hpp"
 #include "game_profiles.hpp"
 #include "particle_signature.hpp"
 
@@ -81,10 +82,13 @@ std::atomic<std::uint64_t> particle_registered{0};
 std::atomic<std::uint64_t> smoke_requests{0};
 std::atomic<std::uint64_t> admitted_requests{0};
 std::atomic<std::uint64_t> suppressed_requests{0};
+std::array<std::atomic<std::uint64_t>, dynamic_band_count> dynamic_band_requests{};
+std::array<std::atomic<std::uint64_t>, dynamic_band_count> dynamic_band_admitted{};
 LayerSampler sampler;
 std::array<std::atomic<void *>, generator_capacity> generators{};
 std::array<std::atomic<float>, generator_capacity> original_lifetimes{};
 std::array<std::atomic<std::uint8_t>, generator_capacity> lifetime_captured{};
+std::array<std::atomic<std::int32_t>, generator_capacity> cached_identities{};
 std::uintptr_t image_base = 0;
 std::uintptr_t executable_begin = 0;
 std::uintptr_t executable_end = 0;
@@ -111,6 +115,19 @@ void reset_diagnostics()
     smoke_requests.store(0, std::memory_order_relaxed);
     admitted_requests.store(0, std::memory_order_relaxed);
     suppressed_requests.store(0, std::memory_order_relaxed);
+    for (auto &slot : dynamic_band_requests) slot.store(0, std::memory_order_relaxed);
+    for (auto &slot : dynamic_band_admitted) slot.store(0, std::memory_order_relaxed);
+}
+
+// Maps a smoke identity to its dynamic-blend band index (0 low, 1 medium,
+// 2 high), or -1 when the identity is not a dynamic band.
+int dynamic_band_index(int identity)
+{
+    if (identity >= particle_identity_dynamic_low &&
+        identity <= particle_identity_dynamic_high) {
+        return identity - particle_identity_dynamic_low;
+    }
+    return -1;
 }
 
 struct CallGuard {
@@ -223,13 +240,17 @@ void register_generator(void *generator)
 {
     std::size_t index = (reinterpret_cast<std::uintptr_t>(generator) >> 4U) &
                         (generator_capacity - 1U);
-    // Capture the original time_to_live from the generator memory. Read it
-    // before any override so subsequent apply_lifetime_override calls can
-    // write original * multiplier without compounding across spawns.
+    // Capture the original generator state at construction. Identity and the
+    // original time_to_live are read before any override so classification
+    // stays valid even after the lifetime override rewrites +0x62c. Reading
+    // identity here (instead of on every spawn) also removes the dependency
+    // on the mutable lifetime/size fields at admission time.
     float original = 0.0F;
+    int identity = particle_identity_none;
     if (profile) {
         auto *address = static_cast<std::uint8_t *>(generator) + profile->lifetime_offset;
         std::memcpy(&original, address, sizeof(original));
+        identity = profile->classify_smoke(generator, image_base);
     }
     for (std::size_t probe = 0; probe < generator_capacity; ++probe) {
         auto &slot = generators[index];
@@ -242,17 +263,78 @@ void register_generator(void *generator)
             if (captured.compare_exchange_strong(expected, 1,
                     std::memory_order_acq_rel, std::memory_order_relaxed)) {
                 cached_lifetime.store(original, std::memory_order_release);
+                cached_identities[index].store(identity, std::memory_order_release);
             }
             return;
         }
         if (!current && slot.compare_exchange_strong(
                 current, generator, std::memory_order_release, std::memory_order_relaxed)) {
             cached_lifetime.store(original, std::memory_order_release);
+            cached_identities[index].store(identity, std::memory_order_release);
             captured.store(1, std::memory_order_release);
             return;
         }
         index = (index + 1U) & (generator_capacity - 1U);
     }
+}
+
+// Looks up a registered generator. Returns true and fills the cached original
+// lifetime and smoke identity when found.
+bool lookup_generator(void *generator, float &original_lifetime, int &identity)
+{
+    std::size_t index = (reinterpret_cast<std::uintptr_t>(generator) >> 4U) &
+                        (generator_capacity - 1U);
+    for (std::size_t probe = 0; probe < generator_capacity; ++probe) {
+        void *registered = generators[index].load(std::memory_order_acquire);
+        if (!registered) return false;
+        if (registered == generator) {
+            original_lifetime = original_lifetimes[index].load(std::memory_order_acquire);
+            identity = cached_identities[index].load(std::memory_order_acquire);
+            return true;
+        }
+        index = (index + 1U) & (generator_capacity - 1U);
+    }
+    return false;
+}
+
+// Fills the identity cache for a registered generator if it is still unknown.
+// The constructor may not have the final SII values yet, so the first spawn
+// can classify live and record the result. Multiple threads can race here, but
+// every writer stores the same valid identity, so the race is benign.
+void cache_identity(void *generator, int identity)
+{
+    if (identity < 0) {
+        return;
+    }
+    std::size_t index = (reinterpret_cast<std::uintptr_t>(generator) >> 4U) &
+                        (generator_capacity - 1U);
+    for (std::size_t probe = 0; probe < generator_capacity; ++probe) {
+        void *registered = generators[index].load(std::memory_order_acquire);
+        if (!registered) return;
+        if (registered == generator) {
+            cached_identities[index].store(identity, std::memory_order_relaxed);
+            return;
+        }
+        index = (index + 1U) & (generator_capacity - 1U);
+    }
+}
+
+// Resolves the smoke identity for a registered generator. Uses the cached
+// identity when present. Otherwise classifies live and records the result so
+// later spawns stay valid even after the lifetime override rewrites +0x62c.
+int resolve_identity(void *generator, const void *classify_target)
+{
+    float original = 0.0F;
+    int identity = particle_identity_none;
+    if (!lookup_generator(generator, original, identity)) {
+        return particle_identity_none;
+    }
+    if (identity != particle_identity_none) {
+        return identity;
+    }
+    identity = profile->classify_smoke(classify_target, image_base);
+    cache_identity(generator, identity);
+    return identity;
 }
 
 bool is_registered_container(void *container)
@@ -299,22 +381,9 @@ void apply_lifetime_override(void *generator)
     // Look up the original time_to_live captured at registration. Writing
     // original * multiplier each spawn would otherwise compound on top of the
     // value we wrote last spawn, causing runaway growth.
-    std::size_t index = (reinterpret_cast<std::uintptr_t>(generator) >> 4U) &
-                        (generator_capacity - 1U);
     float original = 0.0F;
-    bool found = false;
-    for (std::size_t probe = 0; probe < generator_capacity; ++probe) {
-        void *slot_generator = generators[index].load(std::memory_order_acquire);
-        if (!slot_generator) break;
-        if (slot_generator == generator) {
-            if (lifetime_captured[index].load(std::memory_order_acquire) != 0) {
-                original = original_lifetimes[index].load(std::memory_order_acquire);
-                found = true;
-            }
-            break;
-        }
-        index = (index + 1U) & (generator_capacity - 1U);
-    }
+    int identity = particle_identity_none;
+    const bool found = lookup_generator(generator, original, identity);
     if (!found) {
         // Generator was not registered through the constructor hook; fall back
         // to a single-shot read so we still apply the override but do not
@@ -330,6 +399,40 @@ void apply_lifetime_override(void *generator)
     apply_lifetime_to_buffer(generator, profile->lifetime_offset, original, multiplier);
 }
 
+// Admission decision shared by all three hook models.
+//
+// Legacy identities keep the original behavior: the admission fraction is the
+// global demand. Dynamic-blend identities scale demand by their band weight,
+// so the demanded emission is split across the three appearance bands. The
+// weights sum to one, so the expected total admission is unchanged.
+bool admit_request(int identity)
+{
+    if (!eligible.load(std::memory_order_acquire)) {
+        return false;
+    }
+    float fraction = std::clamp(demand.load(std::memory_order_relaxed), 0.0F, 1.0F);
+    const int band = dynamic_band_index(identity);
+    if (band >= 0) {
+        const BlendWeights weights = blend_weights(fraction);
+        const float band_fraction = std::clamp(weights[static_cast<std::size_t>(band)], 0.0F, 1.0F);
+        dynamic_band_requests[static_cast<std::size_t>(band)].fetch_add(
+            1, std::memory_order_relaxed);
+        fraction = band_fraction;
+    }
+    const std::uint32_t threshold = static_cast<std::uint32_t>(fraction * 16777216.0F);
+    if (threshold == 0) {
+        return false;
+    }
+    if (threshold != 0x1000000U && sampler.sample(identity) >= threshold) {
+        return false;
+    }
+    if (band >= 0) {
+        dynamic_band_admitted[static_cast<std::size_t>(band)].fetch_add(
+            1, std::memory_order_relaxed);
+    }
+    return true;
+}
+
 void *allocate_original(void *container)
 {
     return list_allocate(static_cast<std::uint8_t *>(container) + 0x20, profile->node_size);
@@ -343,28 +446,17 @@ extern "C" void *particle_allocator_hook(void *container)
     if (registered) {
         particle_registered.fetch_add(1, std::memory_order_relaxed);
     }
-    const int layer = registered
-                          ? profile->classify_smoke(container, image_base)
-                          : -1;
-    if (layer < 0) {
+    void *generator = static_cast<std::uint8_t *>(container) - profile->container_offset;
+    const int identity = registered ? resolve_identity(generator, container)
+                                    : particle_identity_none;
+    if (identity < 0) {
         return allocate_original(container);
     }
     smoke_requests.fetch_add(1, std::memory_order_relaxed);
-    if (!eligible.load(std::memory_order_acquire)) {
+    if (!admit_request(identity)) {
         suppressed_requests.fetch_add(1, std::memory_order_relaxed);
         return nullptr;
     }
-    const float current = std::clamp(demand.load(std::memory_order_relaxed), 0.0F, 1.0F);
-    const std::uint32_t threshold = static_cast<std::uint32_t>(current * 16777216.0F);
-    if (threshold == 0) {
-        suppressed_requests.fetch_add(1, std::memory_order_relaxed);
-        return nullptr;
-    }
-    if (threshold != 0x1000000U && sampler.sample(layer) >= threshold) {
-        suppressed_requests.fetch_add(1, std::memory_order_relaxed);
-        return nullptr;
-    }
-    void *generator = static_cast<std::uint8_t *>(container) - profile->container_offset;
     apply_lifetime_override(generator);
     admitted_requests.fetch_add(1, std::memory_order_relaxed);
     return allocate_original(container);
@@ -386,22 +478,13 @@ extern "C" void *particle_list_allocate_hook(void *list_storage, std::size_t nod
     if (registered) {
         particle_registered.fetch_add(1, std::memory_order_relaxed);
     }
-    const int layer = registered ? profile->classify_smoke(generator, image_base) : -1;
-    if (layer < 0) {
+    const int identity = registered ? resolve_identity(generator, generator)
+                                    : particle_identity_none;
+    if (identity < 0) {
         return list_allocate(list_storage, node_size);
     }
     smoke_requests.fetch_add(1, std::memory_order_relaxed);
-    if (!eligible.load(std::memory_order_acquire)) {
-        suppressed_requests.fetch_add(1, std::memory_order_relaxed);
-        return nullptr;
-    }
-    const float current = std::clamp(demand.load(std::memory_order_relaxed), 0.0F, 1.0F);
-    const std::uint32_t threshold = static_cast<std::uint32_t>(current * 16777216.0F);
-    if (threshold == 0) {
-        suppressed_requests.fetch_add(1, std::memory_order_relaxed);
-        return nullptr;
-    }
-    if (threshold != 0x1000000U && sampler.sample(layer) >= threshold) {
+    if (!admit_request(identity)) {
         suppressed_requests.fetch_add(1, std::memory_order_relaxed);
         return nullptr;
     }
@@ -418,25 +501,14 @@ extern "C" void particle_spawn_hook(void *generator)
     if (registered) {
         particle_registered.fetch_add(1, std::memory_order_relaxed);
     }
-    const int layer = registered
-                          ? profile->classify_smoke(generator, image_base)
-                          : -1;
-    if (layer < 0) {
+    const int identity = registered ? resolve_identity(generator, generator)
+                                    : particle_identity_none;
+    if (identity < 0) {
         original_spawn(generator);
         return;
     }
     smoke_requests.fetch_add(1, std::memory_order_relaxed);
-    if (!eligible.load(std::memory_order_acquire)) {
-        suppressed_requests.fetch_add(1, std::memory_order_relaxed);
-        return;
-    }
-    const float current = std::clamp(demand.load(std::memory_order_relaxed), 0.0F, 1.0F);
-    const std::uint32_t threshold = static_cast<std::uint32_t>(current * 16777216.0F);
-    if (threshold == 0) {
-        suppressed_requests.fetch_add(1, std::memory_order_relaxed);
-        return;
-    }
-    if (threshold != 0x1000000U && sampler.sample(layer) >= threshold) {
+    if (!admit_request(identity)) {
         suppressed_requests.fetch_add(1, std::memory_order_relaxed);
         return;
     }
@@ -569,6 +641,7 @@ bool install_particle_hook(const char *game_id, std::uint32_t game_version)
     for (auto &slot : generators) slot.store(nullptr, std::memory_order_relaxed);
     for (auto &slot : original_lifetimes) slot.store(0.0F, std::memory_order_relaxed);
     for (auto &slot : lifetime_captured) slot.store(0, std::memory_order_relaxed);
+    for (auto &slot : cached_identities) slot.store(particle_identity_none, std::memory_order_relaxed);
     spawn_hook_installed = false;
     constructor_hook_installed = false;
     advance_frame();
@@ -712,6 +785,12 @@ ParticleHookDiagnostics particle_hook_diagnostics()
         smoke,
         admitted,
         suppressed,
+        dynamic_band_requests[0].load(std::memory_order_relaxed),
+        dynamic_band_admitted[0].load(std::memory_order_relaxed),
+        dynamic_band_requests[1].load(std::memory_order_relaxed),
+        dynamic_band_admitted[1].load(std::memory_order_relaxed),
+        dynamic_band_requests[2].load(std::memory_order_relaxed),
+        dynamic_band_admitted[2].load(std::memory_order_relaxed),
     };
 }
 

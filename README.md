@@ -35,9 +35,9 @@ The plugin is a small program that runs inside the game while you play. The game
 
 The game draws the smoke as a stream of small pictures called particles. Each particle is one puff of smoke. The game makes these particles all the time while the engine runs. The plugin does not draw the smoke itself. Instead, the plugin intercepts the game at the moment it is about to spawn a particle. The plugin reads the current truck data and then decides: let the game spawn this particle, or block it. In this way, the plugin thins out the stream of particles so the smoke matches the engine load.
 
-The plugin recognizes three smoke layers. These are haze, mid, and core. Each layer has a different particle count, sprite size, and lifetime. The mod defines these layers. The plugin reads the same values to identify them. When the game asks for a particle, the plugin first checks which layer the request belongs to. If the request is not a known smoke layer, the plugin lets the game proceed unchanged.
+The plugin recognizes three smoke layers. These are haze, mid, and core. Each layer has a different particle count, sprite size, and lifetime. The mod defines these layers. The plugin reads the same values to identify them. When the game asks for a particle, the plugin first checks which layer the request belongs to. If the request is not a known smoke layer, the plugin lets the game proceed unchanged. One preset, `dynamic-blend`, uses three size bands instead of the three plume layers. The plugin then blends the bands by load. See `docs/linux-particle-hook.md` for the identity table.
 
-The decision uses a demand value between 0 and 1. The exhaust model calculates this value from the truck telemetry. A value of 0 blocks all particles for that request. A value of 1 lets all particles through. A value in between admits a fraction of them. To keep the decision stable across pipes, the plugin uses a deterministic sampler. For each frame, each layer, and each request in order, the sampler produces a number. If the number falls below the threshold set by the demand, the particle is admitted. Matching pipes on different exhausts receive the same decision for the same layer and ordinal. This keeps multi-pipe trucks consistent. Each pipe admits the same fraction of smoke over time.
+The decision uses a demand value between 0 and 1. The exhaust model calculates this value from the truck telemetry. A value of 0 blocks all particles for that request. A value of 1 lets all particles through. A value in between admits a fraction of them. To keep the decision stable across pipes, the plugin uses a deterministic sampler. For each frame, each smoke identity, and each request in order, the sampler produces a number. If the number falls below the threshold set by the demand, the particle is admitted. Matching pipes on different exhausts receive the same decision for the same identity and ordinal. This keeps multi-pipe trucks consistent. Each pipe admits the same fraction of smoke over time.
 
 To do this, the plugin replaces a small part of the game code in memory while the game runs. The plugin writes a jump instruction at the entry of the game's particle spawn function. When the game reaches that point, the jump sends control to the plugin callback. The plugin makes its decision and then calls the original game code to finish the request. Before the plugin changes anything, it checks the game identity and the exact bytes at the target address. If the game does not match, or the bytes differ, the plugin does nothing and the game keeps its normal behavior. This keeps the game safe. When the plugin shuts down, it restores the original bytes.
 
@@ -51,10 +51,10 @@ The Linux implementation gives these functions:
 - A configurable exhaust-demand model. The model uses throttle, RPM, speed, gear, clutch, cargo, and acceleration.
 - An in-process particle hook with version and machine-code checks.
 - Active hook profiles for ATS 1.60.1.8s, ATS 1.61.1.4s, ATS 1.61.2.0s, ETS2 1.60.1.7s, and ETS2 1.61.1.1s. The 1.55 allocator profiles are disabled. Every active profile is pinned to an exact ELF build ID.
-- Synchronized multi-pipe emission. Matching smoke layers on different pipes get identical admission decisions.
+- Synchronized multi-pipe emission. Matching smoke identities on different pipes get identical admission decisions.
 - Non-blocking JSON diagnostics through a Unix datagram socket.
-- Three clean smoke-mod presets. The presets are soft haze, subtle modern exhaust, and dark long smoke. A CMake packaging system builds them.
-- Unit tests for the model, the configuration parser, the plugin ABI, the particle signatures, and the layer admission.
+- Four clean smoke-mod presets. The presets are soft haze, subtle modern exhaust, dark long smoke, and dynamic size blend. A CMake packaging system builds them.
+- Unit tests for the model, the configuration parser, the plugin ABI, the particle signatures, the blend weights, and the identity admission.
 
 The plugin works only with native Linux game executables. It cannot load into a Windows game process under Proton.
 
@@ -78,7 +78,7 @@ Particle-hook support is fail closed. If a game version or machine-code signatur
 | `reverse-enginnering/PM_389_Smoke.zip` | Proprietary companion smoke mod used for analysis. |
 | `smoke-mod/_shared/` | Extracted `PM_389_Smoke.zip` tree. Shared base the variants overlay. The `vehicle/truck/` subtree is reorganized by source into `base_game/` and `workshop/` subdirectories. The packaging script flattens these back to the SCS-expected flat layout. |
 | `smoke-mod/truck_sources.toml` | Sidecar index that maps each truck directory to `base_game` or `workshop`, with evidence and status. |
-| `smoke-mod/soft-haze/`, `smoke-mod/subtle/`, `smoke-mod/dark-long/` | Clean replacement particle definitions and sprite texture for each preset. The overlay is mesh-capable. |
+| `smoke-mod/soft-haze/`, `smoke-mod/subtle/`, `smoke-mod/dark-long/`, `smoke-mod/dynamic-blend/` | Clean replacement particle definitions and sprite texture for each preset. The overlay is mesh-capable. |
 | `smoke-mod/README.md` | Operator-facing build and install instructions for the smoke-mod presets. |
 | `smoke-mod/CMakeLists.txt` | Self-contained CMake packaging system for the smoke-mod variants. |
 | `smoke-mod/build-cmake/` | CMake build tree for the packaged smoke-mod variant archives. This is build output, not committed. |
@@ -134,13 +134,14 @@ After startup, read the game log. The plugin reports whether the telemetry clien
 
 The companion mod `PM_389_Smoke.zip` is read-only proprietary evidence. Its extracted tree lives under `smoke-mod/_shared/`. The `vehicle/truck/` subtree is reorganized by source into `base_game/` and `workshop/` subdirectories. The packaging script flattens these back to the SCS-expected flat `/vehicle/truck/<truck>/` layout in the shipped archive. The original `PM_389_Smoke.zip` in `reverse-enginnering/` is the verbatim evidence copy.
 
-Three clean visual presets are provided as source under `smoke-mod/`. They are repackaged into playable mod archives:
+Four clean visual presets are provided as source under `smoke-mod/`. They are repackaged into playable mod archives:
 
 - **soft-haze**: a soft natural haze with feathered sprite edges, wider lateral drift, gentle fade-in, and lowered per-sprite opacity. Overlapping sprites form the plume.
 - **subtle**: a lighter, modern exhaust with reduced opacity, gentler growth, and less visual persistence. It becomes visible mainly under load.
 - **dark-long**: a heavy, dark smoke that lingers in the air. For a 1-minute layer-0 lifetime, set `LifetimeMultiplier=20` in the plugin configuration.
+- **dynamic-blend**: smoke that grows and darkens as engine demand rises. It uses three appearance bands that share one count and one lifetime. The plugin weights the bands by demand, so the total emission does not change. It needs the updated plugin.
 
-All three presets keep the documented generator layer signatures. These are count, size, and lifetime. The Linux particle hook still recognizes them. The presets also replace the smoke sprite with a feathered, edge-free soft cloud texture. This texture avoids obvious billboard boundaries. The texture keeps the same DX10 `BC3_UNORM_SRGB` format and the original `model/particle/pipe.dds` path.
+The three legacy presets keep the documented generator layer signatures. These are count, size, and lifetime. The Linux particle hook still recognizes them. The `dynamic-blend` preset uses a separate signature set. The presets also replace the smoke sprite with a feathered, edge-free soft cloud texture. This texture avoids obvious billboard boundaries. The texture keeps the same DX10 `BC3_UNORM_SRGB` format and the original `model/particle/pipe.dds` path.
 
 The overlay system is mesh-capable. A preset can also replace `.pmg`/`.pmd`/`.pmc` files at matching relative paths. The build enforces a `.pmg`+`.pmd` pair rule and fails closed on a mismatch.
 
@@ -151,7 +152,7 @@ cmake -S smoke-mod -B smoke-mod/build-cmake
 cmake --build smoke-mod/build-cmake --target smoke_mod_variants
 ```
 
-This copies the shared tree, flattens the source split, removes `.bak` files, overlays the variant files, and writes three archives. The archives are `smoke-mod/build-cmake/PM_389_Smoke_<variant>.zip`. Enable one of these in the game mod manager.
+This copies the shared tree, flattens the source split, removes `.bak` files, overlays the variant files, and writes four archives. The archives are `smoke-mod/build-cmake/PM_389_Smoke_<variant>.zip`. Enable one of these in the game mod manager.
 
 For operator-facing build and install instructions, read [`smoke-mod/README.md`](smoke-mod/README.md). For the implementation reference, read [`docs/mod-smoke-variants.md`](docs/mod-smoke-variants.md).
 

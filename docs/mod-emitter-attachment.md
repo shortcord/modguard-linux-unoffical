@@ -81,7 +81,7 @@ prism::unit_t
 
 The three gen entries sum to 64 particles (40 + 20 + 4) and replace the stock 60-particle emitter with near-to-far tiered sprite sizes (0.090, 0.040, 0.020).
 
-## 4. The three layer signatures
+## 4. The layer signatures
 
 The plugin recognizes a runtime generator by three numbers in its SII configuration: `particles_max_count`, `particle_size`, and `time_to_live`. The table is the single source for these numbers.
 
@@ -91,7 +91,9 @@ The plugin recognizes a runtime generator by three numbers in its SII configurat
 | 1 (mid)  | 20 | 0.040 | 0.7 |
 | 2 (core) |  4 | 0.020 | 0.2 |
 
-Floats match with a tolerance of `0.0005` (`particle_signature.cpp:19`). Any classifier that fails to match all three returns `-1`. The hook then passes the spawn request to the original game function unchanged.
+Floats match with a tolerance of `0.0005` (`particle_signature.cpp`). Any classifier that fails to match all three returns `-1`. The hook then passes the spawn request to the original game function unchanged.
+
+`dynamic-blend` uses a second signature set for three appearance bands. All three bands share count `24` and lifetime `3.0`. Only the size differs: `0.030` (low), `0.060` (medium), and `0.120` (high). See `linux-particle-hook.md` section 6.2 and `mod-smoke-variants.md`.
 
 ## 5. The classifier contract
 
@@ -154,24 +156,24 @@ The table is a fixed-size array of `std::atomic<void *>` slots (`particle_hook.c
 
 For ATS 1.55 and ETS2 1.55 the allocator hook receives a container pointer, not a generator pointer. `is_registered_container` (`particle_hook.cpp:190`) subtracts `profile->container_offset` to derive the owning generator, then probes the table. This is why the offsets in section 5 must match the allocator argument.
 
-A second table caches the original `time_to_live` captured at generator registration. `set_particle_lifetime_multiplier` writes `cached_original * multiplier` to the generator on every admitted spawn. The override is idempotent, so successive spawns do not compound on the previous scaled value.
+A second table caches the original `time_to_live` and the smoke identity captured at generator registration. `set_particle_lifetime_multiplier` writes `cached_original * multiplier` to the generator on every admitted spawn. The override is idempotent, so successive spawns do not compound on the previous scaled value.
 
 ## 7. The control loop
 
 The hook callbacks run the same admission logic (`linux-particle-hook.md` section 8):
 
-1. Classify the layer via the profile's classifier. If the result is `-1`, call the original allocator or spawn unchanged.
+1. Look up the generator in the registry and read its cached identity. If the result is `-1`, call the original allocator or spawn unchanged.
 2. If `eligible` is `false`, suppress. Return `nullptr` for the allocator, or no-op for the spawn.
-3. Read `demand`. Compute `threshold = (uint32)(demand * 16777216.0F)`.
+3. Read `demand`. For a legacy identity, use `demand` as the admission fraction. For a dynamic-blend identity, use the band weight. Compute `threshold = (uint32)(fraction * 16777216.0F)`.
 4. If `threshold == 0`, suppress.
-5. If `threshold != 0x1000000` and `sampler.sample(layer) >= threshold`, suppress.
+5. If `threshold != 0x1000000` and `sampler.sample(identity) >= threshold`, suppress.
 6. Otherwise call the original allocator or spawn.
 
-The 24-bit threshold is the admission fraction in fixed point. `demand = 1` admits every eligible request. `demand = 0` suppresses every request. Intermediate values thin the spawn stream proportionally. Existing particles and per-particle fields are never mutated by the hook. The `particles_max_count`, `particle_size`, `scale_acc`, and live particles stay exactly as the SII and the game renderer set them.
+The 24-bit threshold is the admission fraction in fixed point. An admission fraction of `1` admits every eligible request. A fraction of `0` suppresses every request. Intermediate values thin the spawn stream proportionally. The blend weights sum to one, so the total emission is unchanged. Existing particles and per-particle fields are never mutated by the hook. The `particles_max_count`, `particle_size`, `scale_acc`, and live particles stay exactly as the SII and the game renderer set them.
 
 ## 8. How a new variant or game version breaks this
 
-A new clean variant (`smoke-mod/<name>/`) must keep the three (count, size, lifetime) tuples in section 4 exactly. Other fields are free. If a variant changes any signature, the classifier returns `-1` for every layer and the plugin passes every spawn through to the original allocator. The variant becomes invisible to the hook.
+A new clean variant (`smoke-mod/<name>/`) must keep one of the signature sets in section 4 exactly. Other fields are free. If a variant changes any signature, the classifier returns `-1` for every generator and the plugin passes every spawn through to the original allocator. The variant becomes invisible to the hook. A preset that follows the dynamic-blend signature set must use the updated plugin. An older plugin does not recognize the dynamic bands and passes them through.
 
 A new game version requires a new entry in the `HookProfile` table (`particle_hook.cpp:77`) and a matching classifier in `particle_signature.cpp`. Required artefacts for any new profile:
 

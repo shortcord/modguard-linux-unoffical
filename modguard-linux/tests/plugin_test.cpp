@@ -176,6 +176,9 @@ int main()
     assert(json.find("\"smoke_requests\":0") != std::string::npos);
     assert(json.find("\"admitted_requests\":0") != std::string::npos);
     assert(json.find("\"suppressed_requests\":0") != std::string::npos);
+    assert(json.find("\"dynamic_low_requests\":0") != std::string::npos);
+    assert(json.find("\"dynamic_medium_admitted\":0") != std::string::npos);
+    assert(json.find("\"dynamic_high_requests\":0") != std::string::npos);
     assert(json.find("nan") == std::string::npos);
 
     engine_callback.callback(engine_callback.name.c_str(), SCS_U32_NIL, nullptr,

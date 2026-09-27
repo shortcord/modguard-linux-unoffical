@@ -132,7 +132,10 @@ void publish(const modguard::ExhaustOutput &output)
         "\"cargo_mass\":%.1f,\"hook_active\":%s,"
         "\"particle_constructors\":%llu,\"particle_candidates\":%llu,"
         "\"particle_registered\":%llu,\"smoke_requests\":%llu,"
-        "\"admitted_requests\":%llu,\"suppressed_requests\":%llu}",
+        "\"admitted_requests\":%llu,\"suppressed_requests\":%llu,"
+        "\"dynamic_low_requests\":%llu,\"dynamic_low_admitted\":%llu,"
+        "\"dynamic_medium_requests\":%llu,\"dynamic_medium_admitted\":%llu,"
+        "\"dynamic_high_requests\":%llu,\"dynamic_high_admitted\":%llu}",
         static_cast<unsigned long long>(sequence++),
         static_cast<unsigned long long>(current_time), finite(output.demand), finite(output.raw_demand),
         finite(output.session_peak), finite(inputs.throttle),
@@ -145,7 +148,13 @@ void publish(const modguard::ExhaustOutput &output)
         static_cast<unsigned long long>(diagnostics.particle_registered),
         static_cast<unsigned long long>(diagnostics.smoke_requests),
         static_cast<unsigned long long>(diagnostics.admitted_requests),
-        static_cast<unsigned long long>(diagnostics.suppressed_requests));
+        static_cast<unsigned long long>(diagnostics.suppressed_requests),
+        static_cast<unsigned long long>(diagnostics.dynamic_low_requests),
+        static_cast<unsigned long long>(diagnostics.dynamic_low_admitted),
+        static_cast<unsigned long long>(diagnostics.dynamic_medium_requests),
+        static_cast<unsigned long long>(diagnostics.dynamic_medium_admitted),
+        static_cast<unsigned long long>(diagnostics.dynamic_high_requests),
+        static_cast<unsigned long long>(diagnostics.dynamic_high_admitted));
     if (length <= 0 || static_cast<std::size_t>(length) >= sizeof(message)) {
         return;
     }

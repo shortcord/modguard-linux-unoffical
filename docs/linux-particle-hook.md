@@ -43,7 +43,7 @@ For profile maintenance and the offline binary detector, see
 - `particle_hook_active()` — returns `true` between successful install and
   remove.
 - `particle_hook_diagnostics()` — returns cumulative constructor, candidate,
-  registry, smoke, admission, and suppression counters.
+  registry, smoke, admission, suppression, and per-band dynamic counters.
 
 The state shared between telemetry callbacks and hook callbacks is stored in
 atomics. This state includes demand, eligibility, lifecycle state, active calls,
@@ -188,27 +188,56 @@ The registry is cleared at install time. It is never reused across installs
 
 ---
 
-## 6. Layer classification
+## 6. Generator classification
 
-`particle_signature.{hpp,cpp}` classify a generator or container as one of the
-three documented smoke layers. They return `-1` if the object is not a
-recognized layer.
+`particle_signature.{hpp,cpp}` classify a generator or container as one smoke
+identity value. They return `particle_identity_none` (`-1`) if the object is
+not a recognized smoke generator.
 
-The three layers are identified by particle count, sprite size, and lifetime
-(`particle_signature.cpp:24-36`):
+The construction hook records the identity when the generator is registered.
+It also records the original lifetime. If the constructor does not yet have the
+final SII values, the first spawn classifies live and records the result. Later
+spawns then use the cached identity. This keeps classification correct after the
+lifetime override rewrites `+0x62c` (section 1).
 
-| Layer | `particles_max_count` | `particle_size` (x, y) | `time_to_live` |
-| --- | --- | --- | --- |
-| 0 (haze) | 40 | 0.090 | 3.0 |
-| 1 (mid)  | 20 | 0.040 | 0.7 |
-| 2 (core) | 4  | 0.020 | 0.2 |
+### 6.1 Legacy layers
+
+The three legacy layers use particle count, sprite size, and lifetime
+(`particle_signature.cpp`, `smoke_identity`):
+
+| Identity | Name | `particles_max_count` | `particle_size` (x, y) | `time_to_live` |
+| --- | --- | --- | --- | --- |
+| 0 | haze | 40 | 0.090 | 3.0 |
+| 1 | mid  | 20 | 0.040 | 0.7 |
+| 2 | core | 4  | 0.020 | 0.2 |
 
 Floats match with a tolerance of `0.0005F` (`near`, `particle_signature.cpp:19`).
 
-### 6.1 Per-game classifiers
+### 6.2 Dynamic-blend bands
+
+The `dynamic-blend` smoke-mod preset (see `mod-smoke-variants.md`) defines three
+appearance bands. All three share count `24` and lifetime `3.0`. Only the base
+size differs, so every band requests particles at the same rate:
+
+| Identity | Name | `particles_max_count` | `particle_size` (x, y) | `time_to_live` |
+| --- | --- | --- | --- | --- |
+| 3 | low    | 24 | 0.030 | 3.0 |
+| 4 | medium | 24 | 0.060 | 3.0 |
+| 5 | high   | 24 | 0.120 | 3.0 |
+
+Equal request rate is necessary for blending. The plugin splits the demand
+across the bands by weighted admission (section 8). The weights sum to one, so
+the total emission stays the same.
+
+The bands use a different count from the legacy layers. The sizes are far apart
+and away from the legacy sizes, so the `0.0005F` tolerance cannot confuse a
+band with another identity. A tuple that matches no identity returns
+`particle_identity_none`.
+
+### 6.3 Per-game classifiers
 
 Each classifier first checks the vtable pointer(s) against the image base.
-Then it reads the layer fields at game-specific offsets:
+Then it reads the identity fields at game-specific offsets:
 
 - `classify_ets2_155_smoke_container` (`particle_signature.cpp:40`): the
   container points to `generator - 0x548`. It checks that the generator vtable
@@ -246,15 +275,15 @@ Then it reads the layer fields at game-specific offsets:
 
 `classify_particle_gen_u_smoke` (`particle_signature.cpp`) holds the shared
 1.61 layout. It checks the vtable against a caller-supplied offset. Then it
-classifies the layer from count, size, and lifetime. Each build supplies its
+classifies the identity from count, size, and lifetime. Each build supplies its
 own vtable, so the check stays pinned to one executable. The ETS2 1.61.1.1s
 and ATS 1.61.2.0s classifiers call this helper.
 
-Any vtable mismatch or layer mismatch returns `-1`. The request is then passed
-to the original allocator unchanged.
+Any vtable mismatch or identity mismatch returns `particle_identity_none`. The
+request is then passed to the original allocator unchanged.
 
 > Public-unit identity matching remains the next hardening step. A different
-> mod that uses an identical layer definition can also match. See
+> mod that uses an identical definition can also match. See
 > `modguard-linux/README.md`.
 
 ---
@@ -262,22 +291,22 @@ to the original allocator unchanged.
 ## 7. Admission sampler
 
 `particle_admission.{hpp,cpp}` implement `LayerSampler`. This is a synchronized
-per-layer admission sampler.
+per-identity admission sampler.
 
-Each frame, `frame_start()` increments `frame_` and zeroes the three per-layer
-ordinal counters (`particle_admission.cpp:16-20`). `sample(layer)` increments
-that layer's ordinal. It returns a 24-bit hash of
-`(frame, layer, ordinal)` (`particle_admission.cpp:22-30`):
+Each frame, `frame_start()` increments `frame_` and zeroes the six per-identity
+ordinal counters (`particle_admission.cpp`). `sample(identity)` increments that
+identity's ordinal. It returns a 24-bit hash of `(frame, identity, ordinal)`:
 
 ```
-mix((frame << 24) | (layer << 8) | ordinal) & 0xffffff
+mix((frame << 24) | (identity << 8) | ordinal) & 0xffffff
 ```
 
-`mix` is a splitmix64-style finalizer (`particle_admission.cpp:7-12`). Layer
-indices outside `[0, 2]` are clamped to the nearest valid layer.
+`mix` is a splitmix64-style finalizer (`particle_admission.cpp:7-12`). Identity
+indices outside `[0, particle_identity_max]` are clamped to the nearest valid
+stream.
 
-The seed is `(frame, layer, ordinal)`. Matching generators on different pipes
-receive the identical admission decision for the same layer and ordinal.
+The seed is `(frame, identity, ordinal)`. Matching generators on different pipes
+receive the identical admission decision for the same identity and ordinal.
 Consecutive requests in a frame stay independent. This keeps multi-pipe
 setups consistent. Each pipe admits the same fraction of smoke over time.
 Sprite position, rotation, lifetime, and size randomization stay independent.
@@ -287,27 +316,60 @@ Sprite position, rotation, lifetime, and size randomization stay independent.
 ## 8. Admission decision
 
 The hook callbacks (`particle_allocator_hook`, `particle_spawn_hook`) share the
-same decision logic (`particle_hook.cpp:227-268`):
+same decision logic (`admit_request`, `particle_hook.cpp`):
 
 1. `CallGuard` increments `active_calls` for the duration of the callback. This
-   lets shutdown wait for in-flight calls to drain
-   (`particle_hook.cpp:115-118`).
-2. Classify the layer via the profile's classifier. If the result is `-1`, call
-   the original allocator/spawn unchanged (pass-through).
+   lets shutdown wait for in-flight calls to drain.
+2. Look up the generator in the registry and read its cached identity. If the
+   identity is not cached yet, classify it live and record the result. If the
+   identity is `particle_identity_none`, call the original allocator/spawn
+   unchanged (pass-through).
 3. If `eligible` is false, suppress. Return `nullptr` for the allocator. Return
    for the spawn.
-4. Read `demand` and compute `threshold = (uint32)(demand * 16777216.0F)`.
-5. If `threshold == 0`, suppress.
-6. If `threshold != 0x1000000` (not fully open) and
-   `sampler.sample(layer) >= threshold`, suppress.
-7. Otherwise, call the original allocator/spawn.
+4. Read `demand`. For a legacy identity, use `demand` as the admission
+   fraction. For a dynamic-blend identity, use the identity's band weight
+   (section 8.1).
+5. Compute `threshold = (uint32)(fraction * 16777216.0F)`.
+6. If `threshold == 0`, suppress.
+7. If `threshold != 0x1000000` (not fully open) and
+   `sampler.sample(identity) >= threshold`, suppress.
+8. Otherwise, call the original allocator/spawn.
 
-The callback also updates cumulative diagnostic counters. These counters identify constructor calls, candidate calls, registry matches, smoke matches, admissions, and suppressions. Each update uses a relaxed atomic operation. The callback does not do logging, allocation, socket I/O, or locking.
+The callback also updates cumulative diagnostic counters. These counters identify
+constructor calls, candidate calls, registry matches, smoke matches, admissions,
+suppressions, and the per-band dynamic requests and admissions. Each update uses
+a relaxed atomic operation. The callback does not do logging, allocation, socket
+I/O, or locking.
 
 The threshold is a 24-bit value. A uniform sample in `[0, 0xffffff]` is
-admitted when it is below the threshold. `demand` is the expected admission
-fraction. Existing particles and particle fields are never modified. Only the
-allocation/spawn request itself is gated.
+admitted when it is below the threshold. The admission fraction is the expected
+admission fraction. Existing particles and particle fields are never modified.
+Only the allocation/spawn request itself is gated.
+
+### 8.1 Dynamic-blend weights
+
+`particle_blend.{hpp,cpp}` map demand in `[0, 1]` to three band weights. The
+weights sum to one:
+
+| Demand | low | medium | high |
+| --- | --- | --- | --- |
+| 0.00 | 1.0 | 0.0 | 0.0 |
+| 0.25 | 0.5 | 0.5 | 0.0 |
+| 0.50 | 0.0 | 1.0 | 0.0 |
+| 0.75 | 0.0 | 0.5 | 0.5 |
+| 1.00 | 0.0 | 0.0 | 1.0 |
+
+The low band fades out as demand passes 0.5. The high band fades in. Below
+demand 0.5, the visible bands are low and medium. A non-finite demand is
+treated as zero. An out-of-range demand is clamped to `[0, 1]`.
+
+A generator creates one particle per admitted request. The blend selects which
+band creates each new particle. Existing particles are not changed. They expire
+by their own lifetime. The result is a natural crossfade from small and light
+to large and dark as the demand rises.
+
+The blend is dormant unless the active mod uses the dynamic-blend identities
+(section 6.2). The legacy three-layer presets keep the original behavior.
 
 ---
 

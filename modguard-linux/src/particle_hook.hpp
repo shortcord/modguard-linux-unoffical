@@ -13,6 +13,14 @@ struct ParticleHookDiagnostics {
     std::uint64_t smoke_requests = 0;
     std::uint64_t admitted_requests = 0;
     std::uint64_t suppressed_requests = 0;
+    // Requests/admissions for each dynamic-blend band (low, medium, high).
+    // These are subsets of smoke_requests and admitted_requests.
+    std::uint64_t dynamic_low_requests = 0;
+    std::uint64_t dynamic_low_admitted = 0;
+    std::uint64_t dynamic_medium_requests = 0;
+    std::uint64_t dynamic_medium_admitted = 0;
+    std::uint64_t dynamic_high_requests = 0;
+    std::uint64_t dynamic_high_admitted = 0;
 };
 
 bool install_particle_hook(const char *game_id, std::uint32_t game_version);

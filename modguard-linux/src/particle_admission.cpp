@@ -19,9 +19,9 @@ void LayerSampler::frame_start()
     sequence_.fill(0);
 }
 
-std::uint32_t LayerSampler::sample(int layer)
+std::uint32_t LayerSampler::sample(int identity)
 {
-    const auto clamped = static_cast<std::size_t>(layer);
+    const auto clamped = static_cast<std::size_t>(identity);
     const std::size_t index = clamped < sequence_.size() ? clamped : sequence_.size() - 1U;
     const std::uint64_t ordinal = sequence_[index]++;
     return static_cast<std::uint32_t>(

@@ -21,18 +21,35 @@ bool near(float value, float expected)
     return std::isfinite(value) && std::fabs(value - expected) <= 0.0005F;
 }
 
-int smoke_layer(std::int32_t count, float size_x, float size_y, float lifetime)
+int smoke_identity(std::int32_t count, float size_x, float size_y, float lifetime)
 {
+    // Legacy three-layer plume. These tuples are frozen: changing them would
+    // stop the hook from recognizing the existing clean presets.
     if (count == 40 && near(size_x, 0.090F) && near(size_y, 0.090F) && near(lifetime, 3.0F)) {
-        return 0;
+        return particle_identity_legacy_haze;
     }
     if (count == 20 && near(size_x, 0.040F) && near(size_y, 0.040F) && near(lifetime, 0.7F)) {
-        return 1;
+        return particle_identity_legacy_mid;
     }
     if (count == 4 && near(size_x, 0.020F) && near(size_y, 0.020F) && near(lifetime, 0.2F)) {
-        return 2;
+        return particle_identity_legacy_core;
     }
-    return -1;
+    // Dynamic-blend bands. All three share one count and one lifetime so each
+    // generator issues requests at the same rate. Only the base size differs.
+    // The sizes are spaced far apart (and away from the legacy sizes) so the
+    // 0.0005F tolerance can never confuse a band with another identity.
+    if (count == 24 && near(lifetime, 3.0F)) {
+        if (near(size_x, 0.030F) && near(size_y, 0.030F)) {
+            return particle_identity_dynamic_low;
+        }
+        if (near(size_x, 0.060F) && near(size_y, 0.060F)) {
+            return particle_identity_dynamic_medium;
+        }
+        if (near(size_x, 0.120F) && near(size_y, 0.120F)) {
+            return particle_identity_dynamic_high;
+        }
+    }
+    return particle_identity_none;
 }
 
 } // namespace
@@ -49,7 +66,7 @@ int classify_ets2_155_smoke_container(const void *container_pointer, std::uintpt
         return -1;
     }
 
-    return smoke_layer(read<std::int32_t>(generator + 0x70),
+    return smoke_identity(read<std::int32_t>(generator + 0x70),
                        read<float>(generator + 0x54),
                        read<float>(generator + 0x58),
                        read<float>(generator + 0x524));
@@ -65,7 +82,7 @@ int classify_ets2_160_smoke_generator(const void *generator_pointer, std::uintpt
         return -1;
     }
 
-    return smoke_layer(read<std::int32_t>(generator + 0x630),
+    return smoke_identity(read<std::int32_t>(generator + 0x630),
                        read<float>(generator + 0x58),
                        read<float>(generator + 0x5c),
                        read<float>(generator + 0x62c));
@@ -83,7 +100,7 @@ int classify_ats_155_smoke_container(const void *container_pointer, std::uintptr
         return -1;
     }
 
-    return smoke_layer(read<std::int32_t>(generator + 0x80),
+    return smoke_identity(read<std::int32_t>(generator + 0x80),
                        read<float>(generator + 0x60),
                        read<float>(generator + 0x64),
                        read<float>(generator + 0x7c));
@@ -99,7 +116,7 @@ int classify_ats_160_smoke_generator(const void *generator_pointer, std::uintptr
         return -1;
     }
 
-    return smoke_layer(read<std::int32_t>(generator + 0x630),
+    return smoke_identity(read<std::int32_t>(generator + 0x630),
                        read<float>(generator + 0x58),
                        read<float>(generator + 0x5c),
                        read<float>(generator + 0x62c));
@@ -116,7 +133,7 @@ int classify_particle_gen_u_smoke(const void *generator_pointer,
     if (read<std::uintptr_t>(generator) != image_base + expected_vtable_offset) {
         return -1;
     }
-    return smoke_layer(read<std::int32_t>(generator + 0x630),
+    return smoke_identity(read<std::int32_t>(generator + 0x630),
                        read<float>(generator + 0x54),
                        read<float>(generator + 0x58),
                        read<float>(generator + 0x62c));
@@ -150,14 +167,17 @@ Ats161SmokeInspection inspect_ats_161_smoke_generator(
     const auto size_x = read<float>(generator + 0x54);
     const auto size_y = read<float>(generator + 0x58);
     const auto lifetime = read<float>(generator + 0x62c);
-    const int layer = smoke_layer(count, size_x, size_y, lifetime);
+    const int layer = smoke_identity(count, size_x, size_y, lifetime);
     return {
         vtable == image_base + 0x2e41fc8,
         vtable == image_base + 0x2e416f8,
-        count == 40 || count == 20 || count == 4,
+        count == 40 || count == 20 || count == 4 || count == 24,
         (near(size_x, 0.090F) && near(size_y, 0.090F)) ||
             (near(size_x, 0.040F) && near(size_y, 0.040F)) ||
-            (near(size_x, 0.020F) && near(size_y, 0.020F)),
+            (near(size_x, 0.020F) && near(size_y, 0.020F)) ||
+            (near(size_x, 0.030F) && near(size_y, 0.030F)) ||
+            (near(size_x, 0.060F) && near(size_y, 0.060F)) ||
+            (near(size_x, 0.120F) && near(size_y, 0.120F)),
         near(lifetime, 3.0F) || near(lifetime, 0.7F) || near(lifetime, 0.2F),
         layer,
     };

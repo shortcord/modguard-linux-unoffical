@@ -264,5 +264,36 @@ int main()
     assert(modguard::classify_particle_gen_u_smoke(gen161.data(), base, 0x2e35488) == 0);
     assert(modguard::classify_particle_gen_u_smoke(gen161.data(), base, 0x2e43508) == -1);
 
+    // Dynamic-blend bands. All three share count 24 and lifetime 3.0; only the
+    // base size differs. They must classify to distinct identities and must
+    // not collide with the legacy layers.
+    write(ats161_generator, 0, base + 0x2e41fc8);
+    set_ats161_layer(ats161_generator, 24, 0.030F, 3.0F);
+    assert(modguard::classify_ats_161_smoke_generator(ats161_generator.data(), base) ==
+           modguard::particle_identity_dynamic_low);
+    set_ats161_layer(ats161_generator, 24, 0.060F, 3.0F);
+    assert(modguard::classify_ats_161_smoke_generator(ats161_generator.data(), base) ==
+           modguard::particle_identity_dynamic_medium);
+    set_ats161_layer(ats161_generator, 24, 0.120F, 3.0F);
+    assert(modguard::classify_ats_161_smoke_generator(ats161_generator.data(), base) ==
+           modguard::particle_identity_dynamic_high);
+    // Wrong count or lifetime for a dynamic size must not classify.
+    set_ats161_layer(ats161_generator, 40, 0.060F, 3.0F);
+    assert(modguard::classify_ats_161_smoke_generator(ats161_generator.data(), base) ==
+           modguard::particle_identity_none);
+    set_ats161_layer(ats161_generator, 24, 0.060F, 0.7F);
+    assert(modguard::classify_ats_161_smoke_generator(ats161_generator.data(), base) ==
+           modguard::particle_identity_none);
+    // A size between two bands stays unrecognized; the tolerance is tight.
+    set_ats161_layer(ats161_generator, 24, 0.045F, 3.0F);
+    assert(modguard::classify_ats_161_smoke_generator(ats161_generator.data(), base) ==
+           modguard::particle_identity_none);
+
+    // The legacy three-layer tuple 40/0.090/3.0 must stay a legacy haze, not a
+    // dynamic band, despite sharing lifetime 3.0.
+    set_ats161_layer(ats161_generator, 40, 0.090F, 3.0F);
+    assert(modguard::classify_ats_161_smoke_generator(ats161_generator.data(), base) ==
+           modguard::particle_identity_legacy_haze);
+
     return 0;
 }

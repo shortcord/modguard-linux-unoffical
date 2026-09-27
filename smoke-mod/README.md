@@ -7,7 +7,7 @@ This directory holds the clean smoke-mod presets and the packaging system that b
 The mod controls how truck exhaust smoke looks in American Truck Simulator (ATS). It has two parts:
 
 1. A shared companion-mod tree in `_shared/`. This tree comes from the proprietary `PM_389_Smoke.zip` mod. It supplies the particle definitions, the smoke sprite texture, and the truck-specific exhaust mesh files.
-2. Clean preset overlays in `soft-haze/`, `subtle/`, and `dark-long/`. Each overlay replaces files in the shared tree to change the smoke appearance.
+2. Clean preset overlays in `soft-haze/`, `subtle/`, `dark-long/`, and `dynamic-blend/`. Each overlay replaces files in the shared tree to change the smoke appearance.
 
 The CMake packaging system overlays a preset onto the shared tree and writes a zip archive. You install the archive through the game mod manager.
 
@@ -35,7 +35,7 @@ The shared tree is never modified. The original `PM_389_Smoke.zip` in `../revers
 | `.pmc` | Collision mesh paired with some `.pmg` files | Yes, if the overlay supplies it |
 | `.mat` | Material files in `automat/` | No |
 
-The three current presets replace only the particle definition and the sprite texture. They do not replace mesh files.
+The four current presets replace only the particle definition and the sprite texture. They do not replace mesh files.
 
 ## Truck Source Split
 
@@ -79,6 +79,7 @@ The output archives are in `smoke-mod/build-cmake/`:
 - `PM_389_Smoke_soft-haze.zip`
 - `PM_389_Smoke_subtle.zip`
 - `PM_389_Smoke_dark-long.zip`
+- `PM_389_Smoke_dynamic-blend.zip`
 
 These are build artifacts. Do not commit them.
 
@@ -86,18 +87,21 @@ These are build artifacts. Do not commit them.
 
 Enable one archive in the game mod manager. Do not enable more than one at the same time. The Linux plugin does not install or modify the companion mod.
 
-## The Three Presets
+## The Presets
 
 - **soft-haze**: a soft natural haze with feathered sprite edges, wider lateral drift, and gentle fade-in. Overlapping sprites form the plume.
 - **subtle**: a lighter, modern exhaust with reduced opacity and less visual persistence. It becomes visible mainly under load.
 - **dark-long**: a heavy, dark smoke that lingers in the air. For a 1-minute layer-0 lifetime, set `LifetimeMultiplier=20` in the plugin configuration.
+- **dynamic-blend**: smoke that grows and darkens as engine demand rises. It needs the updated plugin.
 
-All three presets keep the three generator layer signatures. These are particle count, sprite size, and lifetime. The Linux particle hook uses these values to identify the layers. If a preset changes them, the hook does not work.
+The three legacy presets keep the three generator layer signatures. These are particle count, sprite size, and lifetime. The Linux particle hook uses these values to identify the layers. If a preset changes them, the hook does not work.
+
+The `dynamic-blend` preset uses a different signature set. Its three generators share one particle count and one lifetime, and differ only in base size. The plugin maps the demand to three band weights that sum to one. The result is a smooth change from small and light to large and dark.
 
 ## Create a New Preset
 
 1. Create a new directory under `smoke-mod/<preset_name>/`. Copy the structure from an existing preset.
-2. Create `unit/hookup/smoke_new.sii`. Keep the `particles_max_count`, `particle_size`, and `time_to_live` values exactly as they are in the original. Change other values to adjust the smoke appearance.
+2. Create `unit/hookup/smoke_new.sii`. Keep the `particles_max_count`, `particle_size`, and `time_to_live` values exactly as they are in the original. Change other values to adjust the smoke appearance. To blend three sizes, copy the `dynamic-blend` signature set and use the updated plugin.
 3. Create `model/particle/pipe.dds`. Use a feathered, edge-free cloud texture in `BC3_UNORM_SRGB` format.
 4. If you want to replace mesh files, copy the `.pmg` and `.pmd` pair into the preset at the same relative path as the shared tree. If the original has a `.pmc`, copy that too.
 5. Add the preset name to `SMOKE_MOD_VARIANTS` in `CMakeLists.txt`.
@@ -108,5 +112,5 @@ Do the final visual adjustment in game. The repository cannot reproduce the SCS 
 ## Related Documents
 
 - `../docs/mod-smoke-variants.md` — implementation reference for the presets and the packaging system.
-- `../docs/linux-particle-hook.md` — how the hook recognizes the three layers by count, size, and lifetime.
+- `../docs/linux-particle-hook.md` — how the hook recognizes the smoke identities by count, size, and lifetime, and how it blends the dynamic bands.
 - `truck_sources.toml` — truck source classification and evidence.
