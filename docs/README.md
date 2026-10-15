@@ -79,8 +79,9 @@ separate from the reverse-engineering research above.
 
 8. **[`linux-particle-hook.md`](linux-particle-hook.md)** — In-process particle hook
    - Active hook profiles for ATS 1.60.1.8s, ATS 1.61.1.4s, ATS 1.61.2.0s,
-     ETS2 1.60.1.7s, and ETS2 1.61.1.1s; the 1.55 allocator profiles are
-     disabled because NULL suppression crashes the game
+     ATS 1.61.3.0s, ATS 1.61.3.1s, ETS2 1.60.1.7s, and ETS2 1.61.1.1s; the
+     1.55 allocator profiles are disabled because NULL suppression crashes
+     the game
    - Allocator-trampoline, allocator-entry, and spawn-function-entry models
    - Trampoline construction, generator registry, generator classifiers
    - Synchronized `LayerSampler` admission and the 24-bit threshold

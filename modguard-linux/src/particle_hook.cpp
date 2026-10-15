@@ -63,6 +63,12 @@ const HookProfile profiles[] = {
     {HookModel::list_allocate_entry,
      0x1cc1310, 0x1cc1310, 0x20ac330, 0x668, 0x60, 0x62c,
      classify_ats_162_smoke_generator},
+    {HookModel::list_allocate_entry,
+     0x1cc1660, 0x1cc1660, 0x20ac680, 0x668, 0x60, 0x62c,
+     classify_ats_163_smoke_generator},
+    {HookModel::list_allocate_entry,
+     0x1cc1840, 0x1cc1840, 0x20ac860, 0x668, 0x60, 0x62c,
+     classify_ats_164_smoke_generator},
     // The 1.55 allocator_trampoline profiles are disabled. The game reads
     // the node returned by the patched allocator without a NULL check in
     // list-unlink paths (ATS crash dumps: SIGSEGV at 0x48/0x30/0x60, PC in

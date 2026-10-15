@@ -22,7 +22,7 @@ struct GameProfile {
     std::size_t constructor_size;
 };
 
-inline constexpr std::size_t game_profile_count = 5;
+inline constexpr std::size_t game_profile_count = 7;
 
 const std::array<GameProfile, game_profile_count> &game_profiles();
 

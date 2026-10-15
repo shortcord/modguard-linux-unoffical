@@ -65,6 +65,8 @@ classifier. The current profiles are:
 | ATS | 1.61.1.4s, telemetry schema `1.07` (`0x00010007`) | `list_allocate_entry` | `0x1cbfea0` | `0x1cbfea0` | `0x20aaec0` | `0x668` | `0x60` | `0x62c` | `classify_ats_161_smoke_generator` |
 | ETS2 | 1.61.1.1s, telemetry schema `1.20` (`0x00010014`) | `list_allocate_entry` | `0x1cb3d40` | `0x1cb3d40` | `0x209ed60` | `0x668` | `0x60` | `0x62c` | `classify_ets2_161_smoke_generator` |
 | ATS | 1.61.2.0s, telemetry schema `1.07` (`0x00010007`) | `list_allocate_entry` | `0x1cc1310` | `0x1cc1310` | `0x20ac330` | `0x668` | `0x60` | `0x62c` | `classify_ats_162_smoke_generator` |
+| ATS | 1.61.3.0s, telemetry schema `1.07` (`0x00010007`) | `list_allocate_entry` | `0x1cc1660` | `0x1cc1660` | `0x20ac680` | `0x668` | `0x60` | `0x62c` | `classify_ats_163_smoke_generator` |
+| ATS | 1.61.3.1s, telemetry schema `1.07` (`0x00010007`) | `list_allocate_entry` | `0x1cc1840` | `0x1cc1840` | `0x20ac860` | `0x668` | `0x60` | `0x62c` | `classify_ats_164_smoke_generator` |
 
 > **Disabled profiles.** The ATS 1.55 and ETS2 1.55
 > `allocator_trampoline` profiles are removed from the profile table. They
@@ -120,7 +122,7 @@ hook replaces the first 13 bytes of the spawn function entry with a jump to
 to `particle_generator_constructor_hook`. Both originals are reached through
 mapped trampolines. The trampolines run the displaced bytes and jump back.
 
-### 3.3 `list_allocate_entry` (ATS 1.61.1.4s, ETS2 1.61.1.1s, ATS 1.61.2.0s)
+### 3.3 `list_allocate_entry` (ATS 1.61.1.4s, ETS2 1.61.1.1s, ATS 1.61.2.0s, ATS 1.61.3.0s, ATS 1.61.3.1s)
 
 These builds call a shared list allocator for each particle node. The hook
 replaces the first 13 bytes of this allocator with a jump. The callback passes
@@ -272,12 +274,20 @@ Then it reads the identity fields at game-specific offsets:
   generator directly. It uses the shared 1.61 helper with the ATS 1.61.2.0s
   `particle_gen_u` vtable `image_base + 0x2e43508`. It reads count at `+0x630`,
   size at `+0x54`/`+0x58`, and lifetime at `+0x62c`.
+- `classify_ats_163_smoke_generator` (`particle_signature.cpp`): it takes the
+  generator directly. It uses the shared 1.61 helper with the ATS 1.61.3.0s
+  `particle_gen_u` vtable `image_base + 0x2e43868`. It reads count at `+0x630`,
+  size at `+0x54`/`+0x58`, and lifetime at `+0x62c`.
+- `classify_ats_164_smoke_generator` (`particle_signature.cpp`): it takes the
+  generator directly. It uses the shared 1.61 helper with the ATS 1.61.3.1s
+  `particle_gen_u` vtable `image_base + 0x2e43a48`. It reads count at `+0x630`,
+  size at `+0x54`/`+0x58`, and lifetime at `+0x62c`.
 
 `classify_particle_gen_u_smoke` (`particle_signature.cpp`) holds the shared
 1.61 layout. It checks the vtable against a caller-supplied offset. Then it
 classifies the identity from count, size, and lifetime. Each build supplies its
-own vtable, so the check stays pinned to one executable. The ETS2 1.61.1.1s
-and ATS 1.61.2.0s classifiers call this helper.
+own vtable, so the check stays pinned to one executable. The ETS2 1.61.1.1s,
+ATS 1.61.2.0s, ATS 1.61.3.0s, and ATS 1.61.3.1s classifiers call this helper.
 
 Any vtable mismatch or identity mismatch returns `particle_identity_none`. The
 request is then passed to the original allocator unchanged.
@@ -600,6 +610,70 @@ The particle paths pass `generator + 0x668` to the allocator. They request a
 `particle_size` pair from `+0x54` at `0x20a915b`. The count is at `+0x630` and
 the lifetime is at `+0x62c`. The classifier uses the shared 1.61 helper with
 the ATS vtable `0x2e43508`.
+
+### 12.6 ATS 1.61.3.0s evidence
+
+The ATS 1.61.3.0s profile comes from the native Linux executable with SHA-256
+`f7be85bbe9fcb17e0dcee0b2ce5873bd56a88c03c2b0c8a4915ece19f5310370`.
+Its ELF build ID is `f3dcc60665b5cfcb436fe3c6811bd4edcc8f679c`. The game log
+records `American Truck Simulator init ver.1.61.3.0s (rev. c00bea67595e)`.
+
+The static telemetry descriptor at `0x2a69480` records `game_id = ats` and
+`schema = 0x00010007` (1.07). The plugin receives `0x00010007` from
+`scs_telemetry_init`. ATS 1.61.1.4s and ATS 1.61.2.0s record the same schema
+value. The install flow uses the exact build ID to select the correct ATS
+profile.
+
+This build keeps the 1.61 `list_allocate_entry` model. The shared list
+allocator starts at `0x1cc1660`. Its patched bytes are
+`55 48 89 e5 41 54 48 83 ec 18 4c 8b 27`. The base constructor starts at
+`0x20ac680` and installs the `particle_gen_u` vtable address point
+`0x2e43868`. The RTTI typeinfo for that vtable is
+`N5prism14particle_gen_uE`.
+
+The particle paths pass `generator + 0x668` to the allocator at `0x20a9863`.
+They request a `0x60`-byte node and check `test %rax,%rax` for `nullptr` at
+`0x20a986f`. The spawn path loads count at `+0x630` (`0x20a932e`), the
+two-float `particle_size` pair at `+0x54` (`0x20a94a0`) and `+0x58`
+(`0x20a94f2`), and the lifetime at `+0x62c` (`0x20a962e`). The classifier uses
+the shared 1.61 helper with the ATS vtable `0x2e43868`.
+
+The allocator, constructor, and vtable offsets all move by `+0x350` or
+`+0x360` from ATS 1.61.2.0s. The patch bytes and every object field offset are
+identical. The exact build ID therefore separates the two profiles.
+
+### 12.7 ATS 1.61.3.1s evidence
+
+The ATS 1.61.3.1s profile comes from the native Linux executable with SHA-256
+`1e4bb272d62b6242e7be1aa3edd1500d125bd87c67bcb2b5e60e6ae4c439fa12`.
+Its ELF build ID is `7306db39ca0aa6bd662adbe0a0f1fd4161c420ec`. The game log
+records `American Truck Simulator init ver.1.61.3.1s (rev. da49adfbbbdb)`.
+
+The static telemetry descriptor at `0x2a69640` records `game_id = ats` and
+`schema = 0x00010007` (1.07). The plugin receives `0x00010007` from
+`scs_telemetry_init`. ATS 1.61.1.4s, ATS 1.61.2.0s, and ATS 1.61.3.0s record
+the same schema value. The install flow uses the exact build ID to select the
+correct ATS profile.
+
+This build keeps the 1.61 `list_allocate_entry` model. The shared list
+allocator starts at `0x1cc1840`. Its patched bytes are
+`55 48 89 e5 41 54 48 83 ec 18 4c 8b 27`. The base constructor starts at
+`0x20ac860` and installs the `particle_gen_u` vtable address point
+`0x2e43a48`. The RTTI typeinfo for that vtable is
+`N5prism14particle_gen_uE`.
+
+The particle paths pass `generator + 0x668` to the allocator at `0x20a9a43`.
+They request a `0x60`-byte node and check `test %rax,%rax` for `nullptr` at
+`0x20a9a4f`. The spawn path loads count at `+0x630` (`0x20a950e`), the
+two-float `particle_size` pair at `+0x54` (`0x20a9680`) and `+0x58`
+(`0x20a96d2`), and the lifetime at `+0x62c` (`0x20a980e`). The classifier uses
+the shared 1.61 helper with the ATS vtable `0x2e43a48`.
+
+The allocator and constructor offsets move by `+0x1e0` and the vtable by
+`+0x1e0` from ATS 1.61.3.0s. The spawn-path evidence addresses move by `+0x1c0`
+or `+0x1e0` because this build inserts a block in the spawn function. The patch
+bytes and every object field offset are identical. The exact build ID therefore
+separates the profiles.
 
 ---
 

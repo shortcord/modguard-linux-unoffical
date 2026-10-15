@@ -155,6 +155,16 @@ int classify_ats_162_smoke_generator(const void *generator_pointer, std::uintptr
     return classify_particle_gen_u_smoke(generator_pointer, image_base, 0x2e43508);
 }
 
+int classify_ats_163_smoke_generator(const void *generator_pointer, std::uintptr_t image_base)
+{
+    return classify_particle_gen_u_smoke(generator_pointer, image_base, 0x2e43868);
+}
+
+int classify_ats_164_smoke_generator(const void *generator_pointer, std::uintptr_t image_base)
+{
+    return classify_particle_gen_u_smoke(generator_pointer, image_base, 0x2e43a48);
+}
+
 Ats161SmokeInspection inspect_ats_161_smoke_generator(
     const void *generator_pointer, std::uintptr_t image_base)
 {
@@ -216,6 +226,16 @@ bool is_ets2_161_smoke_generator(const void *generator, std::uintptr_t image_bas
 bool is_ats_162_smoke_generator(const void *generator, std::uintptr_t image_base)
 {
     return classify_ats_162_smoke_generator(generator, image_base) >= 0;
+}
+
+bool is_ats_163_smoke_generator(const void *generator, std::uintptr_t image_base)
+{
+    return classify_ats_163_smoke_generator(generator, image_base) >= 0;
+}
+
+bool is_ats_164_smoke_generator(const void *generator, std::uintptr_t image_base)
+{
+    return classify_ats_164_smoke_generator(generator, image_base) >= 0;
 }
 
 bool particle_build_id_matches(const std::uint8_t *actual, std::size_t actual_size,

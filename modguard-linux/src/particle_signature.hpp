@@ -55,6 +55,8 @@ int classify_ats_160_smoke_generator(const void *generator, std::uintptr_t image
 int classify_ats_161_smoke_generator(const void *generator, std::uintptr_t image_base);
 int classify_ets2_161_smoke_generator(const void *generator, std::uintptr_t image_base);
 int classify_ats_162_smoke_generator(const void *generator, std::uintptr_t image_base);
+int classify_ats_163_smoke_generator(const void *generator, std::uintptr_t image_base);
+int classify_ats_164_smoke_generator(const void *generator, std::uintptr_t image_base);
 Ats161SmokeInspection inspect_ats_161_smoke_generator(
     const void *generator, std::uintptr_t image_base);
 
@@ -71,6 +73,8 @@ bool is_ats_160_smoke_generator(const void *generator, std::uintptr_t image_base
 bool is_ats_161_smoke_generator(const void *generator, std::uintptr_t image_base);
 bool is_ets2_161_smoke_generator(const void *generator, std::uintptr_t image_base);
 bool is_ats_162_smoke_generator(const void *generator, std::uintptr_t image_base);
+bool is_ats_163_smoke_generator(const void *generator, std::uintptr_t image_base);
+bool is_ats_164_smoke_generator(const void *generator, std::uintptr_t image_base);
 
 bool particle_build_id_matches(const std::uint8_t *actual, std::size_t actual_size,
                                const std::uint8_t *expected, std::size_t expected_size);

@@ -10,7 +10,7 @@ The repository also contains the analyzed Windows binary and the companion mod. 
 
 | Game | Supported versions |
 | --- | --- |
-| American Truck Simulator | 1.55, 1.60.1.8s, 1.61.1.4s, 1.61.2.0s |
+| American Truck Simulator | 1.55, 1.60.1.8s, 1.61.1.4s, 1.61.2.0s, 1.61.3.0s, 1.61.3.1s |
 | Euro Truck Simulator 2 | 1.55, 1.60.1.7s, 1.61.1.1s |
 
 > **Why the version matters.** The plugin writes a jump instruction into the game code in memory. The location and the exact bytes differ between game versions. The plugin checks the game identity and the bytes at the target address before it changes anything. If the game version or the bytes do not match, the plugin does nothing and the smoke effect stays in its default state. A new game version can move or change the target code. When that happens, the plugin cannot attach until a new profile is added for that version.
@@ -50,7 +50,7 @@ The Linux implementation gives these functions:
 - Native Linux SCS Telemetry SDK integration for ATS and ETS2.
 - A configurable exhaust-demand model. The model uses throttle, RPM, speed, gear, clutch, cargo, and acceleration.
 - An in-process particle hook with version and machine-code checks.
-- Active hook profiles for ATS 1.60.1.8s, ATS 1.61.1.4s, ATS 1.61.2.0s, ETS2 1.60.1.7s, and ETS2 1.61.1.1s. The 1.55 allocator profiles are disabled. Every active profile is pinned to an exact ELF build ID.
+- Active hook profiles for ATS 1.60.1.8s, ATS 1.61.1.4s, ATS 1.61.2.0s, ATS 1.61.3.0s, ATS 1.61.3.1s, ETS2 1.60.1.7s, and ETS2 1.61.1.1s. The 1.55 allocator profiles are disabled. Every active profile is pinned to an exact ELF build ID.
 - Synchronized multi-pipe emission. Matching smoke identities on different pipes get identical admission decisions.
 - Non-blocking JSON diagnostics through a Unix datagram socket.
 - Four clean smoke-mod presets. The presets are soft haze, subtle modern exhaust, dark long smoke, and dynamic size blend. A CMake packaging system builds them.
