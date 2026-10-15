@@ -325,6 +325,38 @@ int main()
     assert(modguard::classify_ats_164_smoke_generator(gen161.data(), base) ==
            modguard::particle_identity_dynamic_low);
 
+    // ATS 1.61.3.18s retains the 1.61 layout but has its own vtable.
+    write(gen161, 0, base + 0x2e46dc8);
+    set_ats161_layer(gen161, 40, 0.090F, 3.0F);
+    assert(modguard::classify_ats_165_smoke_generator(gen161.data(), base) ==
+           modguard::particle_identity_legacy_haze);
+    set_ats161_layer(gen161, 20, 0.040F, 0.7F);
+    assert(modguard::classify_ats_165_smoke_generator(gen161.data(), base) ==
+           modguard::particle_identity_legacy_mid);
+    set_ats161_layer(gen161, 4, 0.020F, 0.2F);
+    assert(modguard::classify_ats_165_smoke_generator(gen161.data(), base) ==
+           modguard::particle_identity_legacy_core);
+    set_ats161_layer(gen161, 24, 0.030F, 3.0F);
+    assert(modguard::classify_ats_165_smoke_generator(gen161.data(), base) ==
+           modguard::particle_identity_dynamic_low);
+    set_ats161_layer(gen161, 24, 0.060F, 3.0F);
+    assert(modguard::classify_ats_165_smoke_generator(gen161.data(), base) ==
+           modguard::particle_identity_dynamic_medium);
+    set_ats161_layer(gen161, 24, 0.120F, 3.0F);
+    assert(modguard::classify_ats_165_smoke_generator(gen161.data(), base) ==
+           modguard::particle_identity_dynamic_high);
+    set_ats161_layer(gen161, 40, 0.5F, 3.0F);
+    write(gen161, 0x58, 0.090F);
+    write(gen161, 0x5c, 0.090F);
+    assert(modguard::classify_ats_165_smoke_generator(gen161.data(), base) ==
+           modguard::particle_identity_none);
+    set_ats161_layer(gen161, 40, 0.090F, 3.0F);
+    write(gen161, 0, ats164_vtable);
+    assert(modguard::classify_ats_165_smoke_generator(gen161.data(), base) ==
+           modguard::particle_identity_none);
+    assert(modguard::classify_ats_165_smoke_generator(nullptr, base) ==
+           modguard::particle_identity_none);
+
     // Dynamic-blend bands. All three share count 24 and lifetime 3.0; only the
     // base size differs. They must classify to distinct identities and must
     // not collide with the legacy layers.

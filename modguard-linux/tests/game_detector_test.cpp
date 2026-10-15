@@ -1,6 +1,7 @@
 #include "game_detector.hpp"
 #include "game_profiles.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <cstdint>
@@ -83,6 +84,16 @@ int main()
 {
     const auto &profiles = modguard::game_profiles();
     assert(!profiles.empty());
+
+    // This exact ATS build must be detectable; the older 1.61 entries cannot match its build ID.
+    const auto ats_161_3_18 = std::find_if(profiles.begin(), profiles.end(), [](const auto &profile) {
+        return std::strcmp(profile.name, "ATS 1.61.3.18s") == 0;
+    });
+    assert(ats_161_3_18 != profiles.end());
+    assert(ats_161_3_18->spawn_offset == 0x1cc4970);
+    assert(ats_161_3_18->constructor_offset == 0x20af990);
+    assert(ats_161_3_18->telemetry_version == 0x00010008);
+    assert(ats_161_3_18->expected_build_id[0] == 0x35);
 
     for (const auto &profile : profiles) {
         // Every built-in profile is pinned. An unpinned profile would accept

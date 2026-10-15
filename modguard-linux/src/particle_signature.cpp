@@ -165,6 +165,11 @@ int classify_ats_164_smoke_generator(const void *generator_pointer, std::uintptr
     return classify_particle_gen_u_smoke(generator_pointer, image_base, 0x2e43a48);
 }
 
+int classify_ats_165_smoke_generator(const void *generator_pointer, std::uintptr_t image_base)
+{
+    return classify_particle_gen_u_smoke(generator_pointer, image_base, 0x2e46dc8);
+}
+
 Ats161SmokeInspection inspect_ats_161_smoke_generator(
     const void *generator_pointer, std::uintptr_t image_base)
 {

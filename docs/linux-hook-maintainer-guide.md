@@ -80,9 +80,10 @@ Current active entries are:
 | ATS 1.61.2.0s | `ats` | `0x00010007` | `e515a3ae857a3a84319d3579b94ba3acbe31edb5` | `list_allocate_entry` |
 | ATS 1.61.3.0s | `ats` | `0x00010007` | `f3dcc60665b5cfcb436fe3c6811bd4edcc8f679c` | `list_allocate_entry` |
 | ATS 1.61.3.1s | `ats` | `0x00010007` | `7306db39ca0aa6bd662adbe0a0f1fd4161c420ec` | `list_allocate_entry` |
+| ATS 1.61.3.18s | `ats` | `0x00010008` | `351f6a926a8af17ad0e603adc2f3b135a661cb5b` | `list_allocate_entry` |
 
 The ATS 1.61.1.4s, ATS 1.61.2.0s, ATS 1.61.3.0s, and ATS 1.61.3.1s profiles
-share a telemetry version.
+share telemetry schema `1.07`. ATS 1.61.3.18s uses schema `1.08`.
 The exact build ID selects the correct profile. All active profiles are pinned.
 The ATS 1.60.x layout is verified for the ATS 1.60.1.8s executable only. Do not
 add an unpinned ATS 1.60.x fallback without per-build machine-code evidence.

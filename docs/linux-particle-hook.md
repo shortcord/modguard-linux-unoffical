@@ -67,6 +67,7 @@ classifier. The current profiles are:
 | ATS | 1.61.2.0s, telemetry schema `1.07` (`0x00010007`) | `list_allocate_entry` | `0x1cc1310` | `0x1cc1310` | `0x20ac330` | `0x668` | `0x60` | `0x62c` | `classify_ats_162_smoke_generator` |
 | ATS | 1.61.3.0s, telemetry schema `1.07` (`0x00010007`) | `list_allocate_entry` | `0x1cc1660` | `0x1cc1660` | `0x20ac680` | `0x668` | `0x60` | `0x62c` | `classify_ats_163_smoke_generator` |
 | ATS | 1.61.3.1s, telemetry schema `1.07` (`0x00010007`) | `list_allocate_entry` | `0x1cc1840` | `0x1cc1840` | `0x20ac860` | `0x668` | `0x60` | `0x62c` | `classify_ats_164_smoke_generator` |
+| ATS | 1.61.3.18s, telemetry schema `1.08` (`0x00010008`) | `list_allocate_entry` | `0x1cc4970` | `0x1cc4970` | `0x20af990` | `0x668` | `0x60` | `0x62c` | `classify_ats_165_smoke_generator` |
 
 > **Disabled profiles.** The ATS 1.55 and ETS2 1.55
 > `allocator_trampoline` profiles are removed from the profile table. They
@@ -122,7 +123,7 @@ hook replaces the first 13 bytes of the spawn function entry with a jump to
 to `particle_generator_constructor_hook`. Both originals are reached through
 mapped trampolines. The trampolines run the displaced bytes and jump back.
 
-### 3.3 `list_allocate_entry` (ATS 1.61.1.4s, ETS2 1.61.1.1s, ATS 1.61.2.0s, ATS 1.61.3.0s, ATS 1.61.3.1s)
+### 3.3 `list_allocate_entry` (ATS 1.61.1.4s, ETS2 1.61.1.1s, ATS 1.61.2.0s, ATS 1.61.3.0s, ATS 1.61.3.1s, ATS 1.61.3.18s)
 
 These builds call a shared list allocator for each particle node. The hook
 replaces the first 13 bytes of this allocator with a jump. The callback passes
@@ -282,12 +283,16 @@ Then it reads the identity fields at game-specific offsets:
   generator directly. It uses the shared 1.61 helper with the ATS 1.61.3.1s
   `particle_gen_u` vtable `image_base + 0x2e43a48`. It reads count at `+0x630`,
   size at `+0x54`/`+0x58`, and lifetime at `+0x62c`.
+- `classify_ats_165_smoke_generator` (`particle_signature.cpp`): it takes the
+  generator directly. It uses the shared 1.61 helper with the ATS 1.61.3.18s
+  `particle_gen_u` vtable `image_base + 0x2e46dc8`. It reads count at `+0x630`,
+  size at `+0x54`/`+0x58`, and lifetime at `+0x62c`.
 
 `classify_particle_gen_u_smoke` (`particle_signature.cpp`) holds the shared
 1.61 layout. It checks the vtable against a caller-supplied offset. Then it
 classifies the identity from count, size, and lifetime. Each build supplies its
 own vtable, so the check stays pinned to one executable. The ETS2 1.61.1.1s,
-ATS 1.61.2.0s, ATS 1.61.3.0s, and ATS 1.61.3.1s classifiers call this helper.
+ ATS 1.61.2.0s, ATS 1.61.3.0s, ATS 1.61.3.1s, and ATS 1.61.3.18s classifiers call this helper.
 
 Any vtable mismatch or identity mismatch returns `particle_identity_none`. The
 request is then passed to the original allocator unchanged.
@@ -674,6 +679,31 @@ The allocator and constructor offsets move by `+0x1e0` and the vtable by
 or `+0x1e0` because this build inserts a block in the spawn function. The patch
 bytes and every object field offset are identical. The exact build ID therefore
 separates the profiles.
+
+### 12.8 ATS 1.61.3.18s evidence
+
+The ATS 1.61.3.18s profile uses the supplied Linux executable `ats.1-61-3-18s`.
+Its SHA-256 is `0d82a2057e403c5b6da13764535c93a1ce7da1590b5a134d1aca3b813908f263`.
+Its GNU ELF build ID is `351f6a926a8af17ad0e603adc2f3b135a661cb5b`.
+The release label comes from the supplied filename. No game log was available.
+
+The static telemetry descriptor at `0x2a6c7a0` contains schema `0x00010008`.
+Its game ID pointer at `0x2a6c7a8` points to `ats` at `0x29fd6ec`.
+The profile records this schema. The exact build ID selects the pinned profile after the game ID matches.
+
+The list allocator begins at `0x1cc4970`. Its first 13 bytes are
+`55 48 89 e5 41 54 48 83 ec 18 4c 8b 27`.
+The base constructor begins at `0x20af990`. Its first 18 bytes are
+`55 48 89 e5 41 55 41 bd 00 01 00 00 41 54 53 48 89 fb`.
+At `0x20af9e6`, the constructor installs vtable address point `0x2e46dc8`.
+The vtable typeinfo at `0x2e46d70` names `N5prism14particle_gen_uE`.
+
+At `0x20acb67`, the spawn path passes `generator + 0x668` to the allocator.
+It requests a `0x60`-byte node at `0x20acb6e` and checks for a null result at
+`0x20acb7f`. The spawn path reads count at `+0x630` (`0x20a9b2d`),
+size at `+0x54` and `+0x58` (`0x20ac7bb`, `0x20ac802`), and lifetime at
+`+0x62c` (`0x20ac93e`). The synthetic tests cover this layout and the
+build-specific vtable. Live game behavior remains untested.
 
 ---
 

@@ -57,6 +57,7 @@ int classify_ets2_161_smoke_generator(const void *generator, std::uintptr_t imag
 int classify_ats_162_smoke_generator(const void *generator, std::uintptr_t image_base);
 int classify_ats_163_smoke_generator(const void *generator, std::uintptr_t image_base);
 int classify_ats_164_smoke_generator(const void *generator, std::uintptr_t image_base);
+int classify_ats_165_smoke_generator(const void *generator, std::uintptr_t image_base);
 Ats161SmokeInspection inspect_ats_161_smoke_generator(
     const void *generator, std::uintptr_t image_base);
 

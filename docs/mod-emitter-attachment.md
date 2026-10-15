@@ -154,7 +154,14 @@ ATS 1.61.3.1s (`classify_ats_164_smoke_generator`, `particle_signature.cpp`):
   point `image_base + 0x2e43a48`.
 - Reads count at `+0x630`, size at `+0x54` and `+0x58`, lifetime at `+0x62c`.
 
-The ETS2 1.61.1.1s, ATS 1.61.2.0s, ATS 1.61.3.0s, and ATS 1.61.3.1s
+ATS 1.61.3.18s (`classify_ats_165_smoke_generator`, `particle_signature.cpp`):
+
+- The allocator receives `generator + 0x668`.
+- Generator vtable at `+0x0` must equal the `particle_gen_u` base address
+  point `image_base + 0x2e46dc8`.
+- Reads count at `+0x630`, size at `+0x54` and `+0x58`, lifetime at `+0x62c`.
+
+The ETS2 1.61.1.1s, ATS 1.61.2.0s, ATS 1.61.3.0s, ATS 1.61.3.1s, and ATS 1.61.3.18s
 classifiers use the shared
 `classify_particle_gen_u_smoke` helper. Each classifier supplies its own
 vtable offset, so the check stays pinned to one executable.
@@ -207,7 +214,7 @@ Public-unit identity matching remains open. The classifiers check vtable pointer
 ATS 1.60.1.8s uses the spawn-function-entry model. The spawn hook replaces the per-particle decision inside the spawn function and bypasses the allocator trampoline. Generators still register through the constructor hook, so the same registration table applies. Future work must not double-register generators in this model.
 
 ATS 1.61.1.4s, ETS2 1.61.1.1s, ATS 1.61.2.0s, ATS 1.61.3.0s, and
-ATS 1.61.3.1s use the
+ ATS 1.61.3.1s and ATS 1.61.3.18s use the
 list-allocator-entry model. The hook passes unrelated allocations through the
 original trampoline.
 Recognized particle callers check for `nullptr`, so suppression does not enter a
